@@ -23,6 +23,7 @@ function setup({ escape = () => false, arrow = () => false } = {}) {
   const w = createKeyWatcher({
     holdMs: 250,
     doubleTapMs: 350,
+    triggerCodes: ['ControlLeft', 'ControlRight'],
     isEditable: (t) => t === 'input',
     now: clock.now,
     setTimer: clock.setTimer,
@@ -39,10 +40,10 @@ function setup({ escape = () => false, arrow = () => false } = {}) {
   return { w, clock, calls };
 }
 
-const RO = { code: 'AltRight', key: 'Alt', target: 'body' };
+const RO = { code: 'ControlLeft', key: 'Control', target: 'body' };
 const key = (k, target = 'body') => ({ code: `Key${k}`, key: k, target });
 
-test('hold Right Option starts and ends listening', () => {
+test('hold Control starts and ends listening', () => {
   const { w, clock, calls } = setup();
   assert.equal(w.keydown(RO), true);
   clock.advance(249);
@@ -122,4 +123,14 @@ test('Escape and arrows are forwarded; handled flag comes from the callback', ()
   assert.equal(w.keydown({ code: 'ArrowLeft', key: 'ArrowLeft', target: 'body' }), false);
   assert.equal(w.keydown(key('K')), false);
   assert.deepEqual(calls, ['escape', 'arrow1', 'arrow-1']);
+});
+
+test('either Control key triggers; Option does not', () => {
+  const { w, clock, calls } = setup();
+  w.keydown({ code: 'ControlRight', key: 'Control', target: 'body' });
+  clock.advance(300);
+  w.keyup({ code: 'ControlRight', key: 'Control', target: 'body' });
+  assert.equal(w.keydown({ code: 'AltRight', key: 'Alt', target: 'body' }), false);
+  clock.advance(300);
+  assert.deepEqual(calls, ['holdStart', 'holdEnd']);
 });

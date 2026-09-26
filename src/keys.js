@@ -1,15 +1,15 @@
-// Right Option push-to-talk. Pure: key events, clock and timers are injected so it can be unit tested.
+// Push-to-talk on the trigger key (Control by default). Pure: key events, clock and timers are injected so it can be unit tested.
 // keydown/keyup return true when the caller should preventDefault() and stopImmediatePropagation().
 export function createKeyWatcher({
-  holdMs, doubleTapMs, isEditable, on,
+  holdMs, doubleTapMs, triggerCodes, isEditable, on,
   now = () => Date.now(), setTimer = setTimeout, clearTimer = clearTimeout,
 }) {
-  let armed = false; // Right Option is down and counts as ours
+  let armed = false; // the trigger key is down and counts as ours
   let holdTimer = null;
   let holding = false;
   let lastTapAt = -Infinity;
 
-  const isTrigger = (e) => e.code === 'AltRight';
+  const isTrigger = (e) => triggerCodes.includes(e.code);
 
   function cancel() {
     armed = false;

@@ -1,5 +1,5 @@
 // Web Speech wrapper for hold-to-talk. Chrome sends the audio to Google's speech service
-// while Right Option is held (documented in the README privacy note).
+// while Control is held (documented in the README privacy note).
 export function createVoice({ lang, onInterim }) {
   const SR = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
   let rec = null;

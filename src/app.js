@@ -80,7 +80,7 @@ export function start() {
     log(why);
     if (queued) {
       queued = null;
-      toast.show({ icon: '⚠', title: 'No transcript for this video', dismissMs: CONFIG.toastMs.info });
+      toast.show({ title: 'No transcript for this video', dismissMs: CONFIG.toastMs.info });
     }
   }
 
@@ -143,7 +143,6 @@ export function start() {
     log(`error (${err?.status ?? '?'}): ${err?.message}`);
     const m = errorToast(err);
     toast.show({
-      icon: '⚠',
       title: m.title,
       actions: m.settings
         ? [{ label: 'Open settings', primary: true, onClick: () => send({ type: 'openOptions' }).catch(() => {}) }]
@@ -156,7 +155,7 @@ export function start() {
     if (!n || last.kind === 'absent') return;
     heatmap.reveal(CONFIG.revealMs);
     toast.show({
-      icon: '🔥', title: `Found ${spotsLabel(n)}`,
+      title: `Found ${spotsLabel(n)}`,
       body: 'Say "next" or press →, or click a highlight.',
       dismissMs: CONFIG.toastMs.highlight,
     });
@@ -169,13 +168,13 @@ export function start() {
     seek(s.time);
     heatmap.pulse(s.from, s.to, CONFIG.pulseMs);
     heatmap.reveal(CONFIG.revealMs);
-    toast.show({ icon: '→', title: matchLabel(i, segs.length, s.time), dismissMs: CONFIG.toastMs.info });
+    toast.show({ title: matchLabel(i, segs.length, s.time), dismissMs: CONFIG.toastMs.info });
   }
 
   function cycle(dir) {
     const segs = last && last.kind !== 'absent' ? last.segments : [];
     if (!segs.length) {
-      toast.show({ icon: '∅', title: 'No matches yet', body: 'Ask something first.', dismissMs: CONFIG.toastMs.info });
+      toast.show({ title: 'No matches yet', body: 'Ask something first.', dismissMs: CONFIG.toastMs.info });
       return false;
     }
     const n = segs.length;
@@ -192,7 +191,7 @@ export function start() {
 
   function undo(prev) {
     seek(prev);
-    toast.show({ icon: '↩', title: `Back to ${formatTime(prev)}`, dismissMs: CONFIG.toastMs.info });
+    toast.show({ title: `Back to ${formatTime(prev)}`, dismissMs: CONFIG.toastMs.info });
   }
 
   async function refineTime(d, query, gen) {
@@ -221,7 +220,7 @@ export function start() {
       const { id: videoId, gen, chunks, windows, durationSec } = video;
       const t0 = performance.now();
       const stale = () => gen !== video.gen || seq !== searchSeq;
-      toast.show({ icon: '🔎', title: `Searching "${parsed.query}"…` });
+      toast.show({ title: `Searching "${parsed.query}"…` });
       heatmap.shimmer(true);
 
       let d;
@@ -258,7 +257,7 @@ export function start() {
       if (d.kind === 'absent') {
         heatmap.clear();
         toast.show({
-          icon: '∅', title: 'Not discussed in this video',
+          title: 'Not discussed in this video',
           body: `Nothing about "${parsed.query}".`, dismissMs: CONFIG.toastMs.absent,
         });
       } else {
@@ -272,7 +271,7 @@ export function start() {
           heatmap.pulse(d.target.from, d.target.to, CONFIG.pulseMs);
           heatmap.reveal(CONFIG.revealMs);
           toast.show({
-            icon: '✓', title: `Jumped to ${formatTime(time)}`,
+            title: `Jumped to ${formatTime(time)}`,
             body: d.segments.length > 1 ? `${spotsLabel(d.segments.length)} found · → for the next one` : '',
             actions: [
               { label: 'Undo', onClick: () => undo(prev) },
@@ -295,8 +294,8 @@ export function start() {
     const parsed = parseQuery(text);
     if (parsed.kind === 'empty') {
       toast.show({
-        icon: '🎙', title: "Didn't catch that",
-        body: 'Hold Right Option and ask again, or double-tap it to type.', dismissMs: CONFIG.toastMs.info,
+        title: "Didn't catch that",
+        body: 'Hold Control and ask again, or double-tap it to type.', dismissMs: CONFIG.toastMs.info,
       });
       return;
     }
@@ -305,7 +304,7 @@ export function start() {
     if (!video.id) return;
     if (video.status === 'preparing' || video.status === 'unavailable') {
       queued = text;
-      toast.show({ icon: '⏳', title: 'Getting things ready…', body: `I'll search "${parsed.query}" when it's ready.` });
+      toast.show({ title: 'Getting things ready…', body: `I'll search "${parsed.query}" when it's ready.` });
       if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
       return;
     }
@@ -315,14 +314,15 @@ export function start() {
   const keys = createKeyWatcher({
     holdMs: CONFIG.holdMs,
     doubleTapMs: CONFIG.doubleTapMs,
+    triggerCodes: CONFIG.triggerCodes,
     isEditable,
     on: {
       holdStart() {
         if (!video.id) return;
         if (!voice.supported) {
           toast.show({
-            icon: '⚠', title: "Voice isn't available here",
-            body: 'Double-tap Right Option to type instead.', dismissMs: CONFIG.toastMs.info,
+            title: "Voice isn't available here",
+            body: 'Double-tap Control to type instead.', dismissMs: CONFIG.toastMs.info,
           });
           return;
         }
@@ -334,8 +334,8 @@ export function start() {
         }
         // Fall back to a no-op handle so holdEnd still stops the mic if the toast can't render.
         listening = toast.show(video.status === 'preparing'
-          ? { icon: '⏳', title: 'Getting things ready…', body: "Keep talking, I'll run it when ready." }
-          : { icon: '🎙', title: 'Listening…', body: 'Release Right Option when done.' })
+          ? { title: 'Getting things ready…', body: "Keep talking, I'll run it when ready." }
+          : { title: 'Listening…', body: 'Release Control when done.' })
           ?? { setTitle() {}, setBody() {} };
       },
       async holdEnd() {
@@ -344,13 +344,13 @@ export function start() {
         const { text, error } = await voice.stop();
         if (error === 'aborted') return;
         if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') {
-          toast.show({ icon: '⚠', title: 'Mic blocked', body: 'Double-tap Right Option to type instead.' });
+          toast.show({ title: 'Mic blocked', body: 'Double-tap Control to type instead.' });
           return;
         }
         if (error && error !== 'no-speech' && !text) {
           toast.show({
-            icon: '⚠', title: "Voice didn't work",
-            body: 'Double-tap Right Option to type instead.', dismissMs: CONFIG.toastMs.info,
+            title: "Voice didn't work",
+            body: 'Double-tap Control to type instead.', dismissMs: CONFIG.toastMs.info,
           });
           return;
         }
@@ -366,7 +366,7 @@ export function start() {
       doubleTap() {
         if (!video.id) return;
         toast.show({
-          icon: '🔎', title: 'Ask this video',
+          title: 'Ask this video',
           input: { placeholder: 'e.g. caffeine and sleep', onSubmit: (t) => submit(t) },
         });
       },

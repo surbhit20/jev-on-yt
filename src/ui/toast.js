@@ -22,8 +22,15 @@ export function createToast() {
   }
 
   function closeButton(dismissMs) {
-    const btn = el('button', 'jev-close', '✕');
+    const btn = el('button', 'jev-close');
     btn.setAttribute('aria-label', 'Close');
+    const cross = document.createElementNS(SVG_NS, 'svg');
+    cross.setAttribute('viewBox', '0 0 28 28');
+    cross.setAttribute('class', 'jev-cross');
+    const x = document.createElementNS(SVG_NS, 'path');
+    x.setAttribute('d', 'M10 10 L18 18 M18 10 L10 18');
+    cross.append(x);
+    btn.append(cross);
     btn.addEventListener('click', hide);
     if (dismissMs) {
       const svg = document.createElementNS(SVG_NS, 'svg');
@@ -40,7 +47,7 @@ export function createToast() {
     return btn;
   }
 
-  function show({ icon = '', title = '', body = '', actions = [], dismissMs = 0, input = null }) {
+  function show({ title = '', body = '', actions = [], dismissMs = 0, input = null }) {
     hide();
     const host = document.getElementById('movie_player');
     if (!host) return null;
@@ -50,7 +57,6 @@ export function createToast() {
     for (const type of SWALLOW) root.addEventListener(type, (e) => e.stopPropagation());
 
     const head = el('div', 'jev-toast-head');
-    if (icon) head.append(el('span', 'jev-toast-icon', icon));
     const titleEl = el('span', 'jev-toast-title', title);
     head.append(titleEl, closeButton(dismissMs));
     root.append(head);
