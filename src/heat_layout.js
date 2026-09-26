@@ -18,3 +18,68 @@ export function heatCells(chunks, heat, durationSec, floor) {
 export function segmentIndexForChunk(segments, idx) {
   return segments.findIndex((s) => idx >= s.from && idx <= s.to);
 }
+
+// Gaussian smoothing over ±radius chunks; nulls count as 0.
+export function smoothGauss(values, radius) {
+  if (radius <= 0) return values.map((v) => v ?? 0);
+  const sigma = radius / 2 + 0.5;
+  return values.map((_, i) => {
+    let sum = 0;
+    let weight = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const j = i + k;
+      if (j < 0 || j >= values.length) continue;
+      const w = Math.exp(-(k * k) / (2 * sigma * sigma));
+      sum += (values[j] ?? 0) * w;
+      weight += w;
+    }
+    return sum / weight;
+  });
+}
+
+// Wave samples for the relevance chart: x at each chunk's midpoint in % of the duration,
+// t = height relative to the video's own peak (0 where smoothed heat is below `floor`).
+export function waveSamples(chunks, heat, durationSec, { smoothRadius, floor }) {
+  if (!(durationSec > 0) || !chunks.length) return [];
+  const smoothed = smoothGauss(heat, smoothRadius);
+  const peak = Math.max(...smoothed);
+  if (!(peak >= floor)) return [];
+  return chunks.map((c, i) => ({
+    x: clampPct(((c.start + c.end) / 2 / durationSec) * 100),
+    t: smoothed[i] < floor ? 0 : smoothed[i] / peak,
+  }));
+}
+
+const r2 = (n) => Number(n.toFixed(2));
+
+// SVG paths in a 100 × height viewBox: `top` is the smooth curve (Catmull-Rom → Bézier),
+// `area` closes it down to the baseline across the full width.
+export function wavePath(samples, height) {
+  const pts = samples.map((s) => [s.x, height * (1 - s.t)]);
+  const clampY = (y) => Math.min(height, Math.max(0, y));
+  let top = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, clampY(p1[1] + (p2[1] - p0[1]) / 6)];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, clampY(p2[1] - (p3[1] - p1[1]) / 6)];
+    top += ` C${r2(c1[0])} ${r2(c1[1])} ${r2(c2[0])} ${r2(c2[1])} ${r2(p2[0])} ${r2(p2[1])}`;
+  }
+  const area = `M0 ${height} L${top.slice(1)} L100 ${height} Z`;
+  return { top, area };
+}
+
+// Colour ramp lookup: `colors` is [[t, [r, g, b]], ...] with t ascending from 0 to 1.
+export function waveColor(t, colors) {
+  for (let k = 1; k < colors.length; k++) {
+    const [b, cb] = colors[k];
+    if (t <= b) {
+      const [a, ca] = colors[k - 1];
+      const f = b === a ? 0 : (t - a) / (b - a);
+      return ca.map((v, j) => Math.round(v + (cb[j] - v) * f));
+    }
+  }
+  return colors[colors.length - 1][1];
+}

@@ -262,7 +262,7 @@ export function start() {
           body: `Nothing about "${parsed.query}".`, dismissMs: CONFIG.toastMs.absent,
         });
       } else {
-        heatmap.render({ chunks, heat: d.heat, durationSec, floor: CONFIG.heatFloor });
+        heatmap.render({ chunks, heat: d.heat, durationSec, floor: CONFIG.heatFloor, wave: CONFIG.wave });
         if (d.kind === 'jump') {
           const time = await refineTime(d, parsed.query, gen);
           if (stale()) return;

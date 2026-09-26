@@ -1,4 +1,50 @@
-import { heatCells } from '../heat_layout.js';
+import { heatCells, waveSamples, wavePath, waveColor } from '../heat_layout.js';
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let gradientSeq = 0;
+
+function svgEl(tag, attrs) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+  return node;
+}
+
+// Horizontal gradient whose stops follow the wave samples (colour and opacity per chunk).
+function gradient(id, samples, colors, opacityAt) {
+  const g = svgEl('linearGradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, x2: 100, y1: 0, y2: 0 });
+  for (const s of samples) {
+    const [r, gg, b] = waveColor(s.t, colors);
+    g.append(svgEl('stop', {
+      offset: `${s.x}%`, 'stop-color': `rgb(${r},${gg},${b})`, 'stop-opacity': opacityAt(s.t).toFixed(3),
+    }));
+  }
+  return g;
+}
+
+// Translucent rolling-hill chart drawn just above the progress bar.
+function waveEl(samples, wave) {
+  const { area, top } = wavePath(samples, wave.heightPx);
+  const id = ++gradientSeq;
+  const svg = svgEl('svg', {
+    class: 'jev-wave', viewBox: `0 0 100 ${wave.heightPx}`, preserveAspectRatio: 'none', 'aria-hidden': 'true',
+  });
+  svg.style.height = `${wave.heightPx}px`;
+  const defs = svgEl('defs', {});
+  defs.append(
+    gradient(`jev-fill-${id}`, samples, wave.colors,
+      (t) => (t > 0 ? wave.minOpacity + (wave.maxOpacity - wave.minOpacity) * t : 0)),
+    gradient(`jev-edge-${id}`, samples, wave.colors,
+      (t) => (t > 0 ? wave.edgeOpacity * (0.4 + 0.6 * t) : 0)),
+  );
+  svg.append(
+    defs,
+    svgEl('path', { d: area, fill: `url(#jev-fill-${id})` }),
+    svgEl('path', {
+      d: top, fill: 'none', stroke: `url(#jev-edge-${id})`, 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke',
+    }),
+  );
+  return svg;
+}
 
 // Heat layer inside YouTube's progress bar. Cells use % positions, so resize, theater and
 // fullscreen need no observers. The layer is re-created if YouTube rebuilds the bar.
@@ -36,9 +82,12 @@ export function createHeatmap({ onCellClick, revealTickMs }) {
     return d;
   }
 
-  function render({ chunks, heat, durationSec, floor }) {
+  function render({ chunks, heat, durationSec, floor, wave }) {
     cells = heatCells(chunks, heat, durationSec, floor);
-    ensureLayer()?.replaceChildren(...cells.map(cellEl));
+    const samples = waveSamples(chunks, heat, durationSec, wave);
+    const children = cells.map(cellEl);
+    if (samples.length) children.unshift(waveEl(samples, wave));
+    ensureLayer()?.replaceChildren(...children);
   }
 
   function shimmer(on) {
