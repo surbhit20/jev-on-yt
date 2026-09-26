@@ -159,7 +159,7 @@ export function start() {
     readyNotice = true;
     preparingShown = true;
     toast.show({
-      loading: true, title: 'Getting things ready', body: 'Reading the transcript. This takes a few seconds.', dismissMs,
+      loading: true, title: 'Getting things ready', dismissMs,
     });
     if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
   }
