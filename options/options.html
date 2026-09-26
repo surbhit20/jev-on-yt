@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Jev YT settings</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 480px; margin: 48px auto; padding: 0 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; border-radius: 8px; border: 1px solid #8886; }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    button { padding: 8px 14px; font: inherit; border-radius: 8px; border: 1px solid #8886; cursor: pointer; }
+    #status { min-height: 1.5em; margin-top: 12px; }
+    .note { opacity: 0.7; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Jev YT</h1>
+    <label for="key">TypeSafe API key</label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="test">Test key</button>
+    </div>
+    <p id="status" role="status"></p>
+    <p class="note">Your key stays in this browser and is sent only to api.typesafe.ai.</p>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
