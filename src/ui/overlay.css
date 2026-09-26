@@ -1,0 +1,52 @@
+/* Jev YT: heatmap layer inside .ytp-progress-bar and a toast inside #movie_player. */
+
+.jev-heat { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
+.jev-cell {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(255, 176, 32, var(--jev-a, 0.5));
+  pointer-events: auto; cursor: pointer;
+}
+.jev-cell.jev-pulse { animation: jev-pulse 0.5s ease-in-out 3; }
+@keyframes jev-pulse { 50% { background: rgba(255, 255, 255, 0.95); } }
+.jev-heat.jev-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent) no-repeat;
+  background-size: 30% 100%;
+  animation: jev-shimmer 1.2s linear infinite;
+}
+@keyframes jev-shimmer { from { background-position: -30% 0; } to { background-position: 130% 0; } }
+
+.jev-toast {
+  position: absolute; top: 12px; right: 12px; z-index: 1000;
+  width: min(360px, calc(100% - 24px)); box-sizing: border-box;
+  padding: 14px 16px; border-radius: 16px;
+  background: rgba(15, 15, 15, 0.94); color: #f1f1f1;
+  font: 500 14px/1.4 Roboto, Arial, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.jev-toast-head { display: flex; align-items: center; gap: 10px; }
+.jev-toast-icon { font-size: 16px; }
+.jev-toast-title { flex: 1; font-size: 15px; font-weight: 600; }
+.jev-toast-body { margin-top: 6px; color: #aaa; font-weight: 400; }
+.jev-toast-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.jev-btn {
+  border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer;
+  font: 600 13px Roboto, Arial, sans-serif; background: #272727; color: #f1f1f1;
+}
+.jev-btn.jev-primary { background: #f1f1f1; color: #0f0f0f; }
+.jev-close {
+  position: relative; width: 28px; height: 28px; padding: 0; border: 0;
+  background: none; color: #f1f1f1; cursor: pointer; font-size: 14px;
+}
+.jev-close svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.jev-ring {
+  fill: none; stroke: #f1f1f1; stroke-width: 2;
+  stroke-dasharray: 81.7; stroke-dashoffset: 0;
+  animation: jev-ring var(--jev-ms, 4000ms) linear forwards;
+}
+@keyframes jev-ring { to { stroke-dashoffset: 81.7; } }
+.jev-input {
+  width: 100%; box-sizing: border-box; margin-top: 10px; padding: 9px 12px;
+  border-radius: 10px; border: 1px solid #3f3f3f; background: #121212; color: #f1f1f1;
+  font: 400 14px Roboto, Arial, sans-serif; outline: none;
+}
+.jev-input:focus { border-color: #aaa; }
