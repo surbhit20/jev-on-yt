@@ -44,6 +44,7 @@
     if (videoId === video.id) return;
     const gen = ++video.gen;
     last = null;
+    cursor = 0;
     Object.assign(video, {
       id: videoId, status: videoId ? 'preparing' : 'idle',
       lines: null, chapters: [], chunks: null, windows: null, startPromise: null, durationSec: 0,
@@ -119,6 +120,7 @@
     const bests = res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null));
     const unknown = rel.map((v) => v == null);
     const start = await video.startPromise;
+    if (gen !== video.gen) return;
     const d = scoring.decide({
       chunks, rel, start, bests, exists, unknown, highlightOnly: parsed.highlightOnly, config: CONFIG,
     });
