@@ -71,3 +71,24 @@ export function wavePath(samples, height) {
   const area = `M0 ${height} L${top.slice(1)} L100 ${height} Z`;
   return { top, area };
 }
+
+// Which result segment a click at `xPct` (0–100 of the duration) belongs to: the segment
+// containing that moment's chunk, else the nearest segment by chunk distance. -1 if none.
+export function segmentAtX(xPct, chunks, durationSec, segments) {
+  if (!segments.length || !chunks.length) return -1;
+  const t = (xPct / 100) * durationSec;
+  let idx = chunks.findIndex((c) => t < c.end);
+  if (idx < 0) idx = chunks.length - 1;
+  const inside = segmentIndexForChunk(segments, idx);
+  if (inside >= 0) return inside;
+  let best = -1;
+  let bestDist = Infinity;
+  segments.forEach((s, i) => {
+    const dist = idx < s.from ? s.from - idx : idx - s.to;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  });
+  return best;
+}

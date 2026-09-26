@@ -67,3 +67,15 @@ test('wavePath: closed area on the baseline, peak touches the top, nothing below
   assert.ok(ys.every((y) => y >= 0 && y <= 48));
 });
 
+
+import { segmentAtX } from '../src/heat_layout.js';
+
+test('segmentAtX: a click inside a segment picks it; a click beside it picks the nearest', () => {
+  const chunks = Array.from({ length: 10 }, (_, i) => ({ start: i * 10, end: (i + 1) * 10 }));
+  const segments = [{ from: 6, to: 8 }, { from: 1, to: 2 }]; // sorted by score, not position
+  assert.equal(segmentAtX(75, chunks, 100, segments), 0); // t=75 s → chunk 7
+  assert.equal(segmentAtX(15, chunks, 100, segments), 1); // chunk 1
+  assert.equal(segmentAtX(35, chunks, 100, segments), 1); // chunk 3: 1 away from seg 1, 3 from seg 0
+  assert.equal(segmentAtX(99.9, chunks, 100, segments), 0); // chunk 9: next to seg 0
+  assert.equal(segmentAtX(50, chunks, 100, []), -1);
+});

@@ -9,14 +9,26 @@ function svgEl(tag, attrs) {
 }
 
 // Peaks-only relevance chart drawn just above the progress bar: solid fill plus an edge line.
-function waveEl(samples, wave) {
+// The filled peaks are clickable; `onClick` gets the click position in % of the duration.
+function waveEl(samples, wave, onClick) {
   const { area, top } = wavePath(samples, wave.heightPx);
   const svg = svgEl('svg', {
     class: 'jev-wave', viewBox: `0 0 100 ${wave.heightPx}`, preserveAspectRatio: 'none', 'aria-hidden': 'true',
   });
   svg.style.height = `${wave.heightPx}px`;
+  const fill = svgEl('path', { class: 'jev-wave-area', d: area, fill: wave.color, 'fill-opacity': wave.fillOpacity });
+  // The wave lives inside YouTube's progress bar: keep YouTube from treating this as a scrub.
+  for (const type of ['pointerdown', 'mousedown', 'mouseup']) {
+    fill.addEventListener(type, (e) => { e.stopPropagation(); e.preventDefault(); });
+  }
+  fill.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const r = svg.getBoundingClientRect();
+    if (r.width > 0) onClick(((e.clientX - r.left) / r.width) * 100);
+  });
   svg.append(
-    svgEl('path', { d: area, fill: wave.color, 'fill-opacity': wave.fillOpacity }),
+    fill,
     svgEl('path', {
       d: top, fill: 'none', stroke: wave.color, 'stroke-opacity': wave.edgeOpacity,
       'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke',
@@ -27,7 +39,7 @@ function waveEl(samples, wave) {
 
 // Heat layer inside YouTube's progress bar. Cells use % positions, so resize, theater and
 // fullscreen need no observers. The layer is re-created if YouTube rebuilds the bar.
-export function createHeatmap({ onCellClick, revealTickMs }) {
+export function createHeatmap({ onCellClick, onWaveClick, revealTickMs }) {
   let layer = null;
   let cells = [];
   let pulseTimer = null;
@@ -65,7 +77,7 @@ export function createHeatmap({ onCellClick, revealTickMs }) {
     cells = heatCells(chunks, heat, durationSec, floor);
     const samples = waveSamples(chunks, heat, durationSec, wave);
     const children = cells.map(cellEl);
-    if (samples.length) children.unshift(waveEl(samples, wave));
+    if (samples.length) children.unshift(waveEl(samples, wave, onWaveClick));
     ensureLayer()?.replaceChildren(...children);
   }
 

@@ -6,7 +6,7 @@ import { formatTime } from './time.js';
 import * as chunker from './chunker.js';
 import { parseQuery } from './query.js';
 import * as scoring from './scoring.js';
-import { segmentIndexForChunk } from './heat_layout.js';
+import { segmentIndexForChunk, segmentAtX } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
 import { createVoice } from './voice.js';
 import { createMediaGuard } from './media_guard.js';
@@ -21,7 +21,7 @@ const isEditable = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELEC
 export function start() {
   const bridge = makeBridge();
   const toast = createToast();
-  const heatmap = createHeatmap({ onCellClick, revealTickMs: CONFIG.revealTickMs });
+  const heatmap = createHeatmap({ onCellClick, onWaveClick, revealTickMs: CONFIG.revealTickMs });
   let listening = null; // toast handle while the mic is open
   const voice = createVoice({
     lang: CONFIG.voiceLang,
@@ -181,7 +181,7 @@ export function start() {
     heatmap.reveal(CONFIG.revealMs);
     toast.show({
       title: `Found ${spotsLabel(n)}`,
-      body: 'Say "next" or press →, or click a highlight.',
+      body: 'Click a peak or press → for the next one.',
       dismissMs: CONFIG.toastMs.highlight,
     });
   }
@@ -205,6 +205,13 @@ export function start() {
     const n = segs.length;
     goToSegment(cursor < 0 ? (dir > 0 ? 0 : n - 1) : (cursor + dir + n) % n);
     return true;
+  }
+
+  // A click on a peak jumps to the start of that match (walked-back start), not the click point.
+  function onWaveClick(xPct) {
+    if (!last || last.kind === 'absent' || !video.chunks) return;
+    const i = segmentAtX(xPct, video.chunks, video.durationSec, last.segments);
+    if (i >= 0) goToSegment(i);
   }
 
   function onCellClick(idx) {

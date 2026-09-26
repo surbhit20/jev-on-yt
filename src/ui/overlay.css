@@ -12,6 +12,8 @@
   position: absolute; left: 0; bottom: 100%; width: 100%;
   margin-bottom: 2px; overflow: visible; pointer-events: none;
 }
+.jev-wave-area { pointer-events: visiblePainted; cursor: pointer; transition: fill-opacity 120ms; }
+.jev-wave-area:hover { fill-opacity: 0.78; }
 .jev-cell.jev-pulse { animation: jev-pulse 0.5s ease-in-out 3; }
 @keyframes jev-pulse { 50% { background: rgba(255, 255, 255, 0.95); } }
 .jev-heat.jev-shimmer {

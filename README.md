@@ -18,7 +18,7 @@ Scoring uses [TypeSafe](https://typesafe.ai)'s Jev model with your own API key.
 |---|---|
 | Ask by voice | Hold **Control**, speak, release |
 | Ask by typing | Double-tap **Control** |
-| Next / previous match | Say "next" / "back", or press → / ← while the toast is open |
+| Next / previous match | Click a lime peak (it jumps to where that part starts), press → / ← while the toast is open, or say "next" / "back" |
 | Undo a jump | **Undo** in the toast |
 | Clear highlights | **Esc** |
 
