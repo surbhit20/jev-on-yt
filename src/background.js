@@ -81,6 +81,11 @@ const handlers = {
     const lineIdx = await runRefine({ lines, offset, query, call, model: CONFIG.model, maxLines: CONFIG.maxRefineLines });
     return { lineIdx };
   },
+
+  async openOptions() {
+    await chrome.runtime.openOptionsPage();
+    return {};
+  },
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -92,3 +97,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   );
   return true;
 });
+
+chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());

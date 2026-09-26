@@ -8,16 +8,18 @@
   "background": { "service_worker": "src/background.js", "type": "module" },
   "content_scripts": [
     { "matches": ["https://www.youtube.com/*"], "js": ["src/page_bridge.js"], "world": "MAIN", "run_at": "document_start" },
-    { "matches": ["https://www.youtube.com/*"], "js": ["src/content.js"], "run_at": "document_idle" }
+    { "matches": ["https://www.youtube.com/*"], "js": ["src/content.js"], "css": ["src/ui/overlay.css"], "run_at": "document_idle" }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "src/config.js", "src/bridge_client.js", "src/transcript.js", "src/transcript_parse.js",
-        "src/time.js", "src/chunker.js", "src/query.js", "src/scoring.js"
+        "src/app.js", "src/config.js", "src/bridge_client.js", "src/transcript.js", "src/transcript_parse.js",
+        "src/time.js", "src/chunker.js", "src/query.js", "src/scoring.js", "src/heat_layout.js",
+        "src/keys.js", "src/voice.js", "src/ui/toast.js", "src/ui/heatmap.js", "src/ui/messages.js"
       ],
       "matches": ["https://www.youtube.com/*"]
     }
   ],
-  "options_page": "options/options.html"
+  "options_page": "options/options.html",
+  "action": { "default_title": "Jev YT settings" }
 }
