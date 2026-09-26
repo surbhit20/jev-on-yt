@@ -9,6 +9,7 @@ import * as scoring from './scoring.js';
 import { segmentIndexForChunk } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
 import { createVoice } from './voice.js';
+import { createMediaGuard } from './media_guard.js';
 import { createToast } from './ui/toast.js';
 import { createHeatmap } from './ui/heatmap.js';
 import { errorToast, spotsLabel, matchLabel } from './ui/messages.js';
@@ -43,6 +44,8 @@ export function start() {
   }
 
   const videoEl = () => document.querySelector('#movie_player video') ?? document.querySelector('video');
+  // Keeps the video's own audio out of the mic while the user talks.
+  const media = createMediaGuard(videoEl, CONFIG.whileListening);
   const seek = (t) => { const v = videoEl(); if (v) v.currentTime = t; };
   const currentTime = () => videoEl()?.currentTime ?? 0;
 
@@ -94,6 +97,7 @@ export function start() {
       cursor = -1;
       queued = null;
       voice.abort();
+      media.reset();
       listening = null;
     }
     const gen = ++video.gen;
@@ -328,6 +332,7 @@ export function start() {
         }
         try {
           voice.start();
+          media.engage();
         } catch (err) {
           log('voice failed to start:', err.message);
           return;
@@ -342,7 +347,8 @@ export function start() {
         if (!listening) return;
         listening = null;
         const { text, error } = await voice.stop();
-        if (error === 'aborted') return;
+        if (error === 'aborted') return; // a newer hold owns the mic (and the paused video)
+        media.release();
         if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') {
           toast.show({ title: 'Mic blocked', body: 'Double-tap Control to type instead.' });
           return;
@@ -358,6 +364,7 @@ export function start() {
       },
       holdCancel() {
         voice.abort();
+        media.release();
         if (listening) {
           listening = null;
           toast.hide();

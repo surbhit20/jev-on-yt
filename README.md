@@ -22,6 +22,8 @@ Scoring uses [TypeSafe](https://typesafe.ai)'s Jev model with your own API key.
 | Undo a jump | **Undo** in the toast |
 | Clear highlights | **Esc** |
 
+While you hold Control the video pauses so its audio doesn't mix into your question, and it resumes when you let go (set `whileListening` in `src/config.js` to `'mute'` or `'none'` to change this).
+
 The first time you hold Control, Chrome asks for microphone access for youtube.com.
 
 Questions that start with "show", "where", "find" or "highlight" only highlight, never jump.

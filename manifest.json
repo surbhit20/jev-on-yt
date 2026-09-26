@@ -15,7 +15,7 @@
       "resources": [
         "src/app.js", "src/config.js", "src/bridge_client.js", "src/transcript.js", "src/transcript_parse.js",
         "src/time.js", "src/chunker.js", "src/query.js", "src/scoring.js", "src/heat_layout.js",
-        "src/keys.js", "src/voice.js", "src/ui/toast.js", "src/ui/heatmap.js", "src/ui/messages.js"
+        "src/keys.js", "src/voice.js", "src/media_guard.js", "src/ui/toast.js", "src/ui/heatmap.js", "src/ui/messages.js"
       ],
       "matches": ["https://www.youtube.com/*"]
     }

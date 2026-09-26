@@ -54,6 +54,7 @@ export const CONFIG = {
   holdMs: 250,
   doubleTapMs: 350,
   voiceLang: 'en-US',
+  whileListening: 'pause', // keep the video's audio out of the mic: 'pause' | 'mute' | 'none'
 
   // Transcript
   adWaitMs: 1000,
