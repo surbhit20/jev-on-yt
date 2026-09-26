@@ -4,8 +4,8 @@ import { findTranscriptParams, parseTranscriptResponse, parseJson3, linesFromPan
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PANEL = 'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]';
 
-// The only transcript entry point. Other sites can add their own implementation later.
-export async function getTranscript({ bridge, videoId, data, durationSec, log = () => {}, isStale = () => false }) {
+// Player captions, waiting out a pre-roll ad first. Returns lines or null.
+async function tryCaptions({ bridge, videoId, log, isStale }) {
   try {
     let loggedAdWait = false;
     for (let attempt = 0; attempt <= CONFIG.adWaitTries; attempt++) {
@@ -13,9 +13,9 @@ export async function getTranscript({ bridge, videoId, data, durationSec, log = 
       const res = await bridge.call('captions', { videoId });
       if (res.status === 200) {
         const lines = parseJson3(JSON.parse(res.body));
-        if (lines.length) return { lines, method: 'captions' };
+        if (lines.length) return lines;
         log('captions returned 0 lines');
-        break;
+        return null;
       }
       if (res.status === 'ad') {
         if (!loggedAdWait) {
@@ -26,10 +26,26 @@ export async function getTranscript({ bridge, videoId, data, durationSec, log = 
         continue;
       }
       log(`captions status ${res.status}`);
-      break;
+      return null;
     }
   } catch (e) {
     log(`captions failed: ${e.message}`);
+  }
+  return null;
+}
+
+// The only transcript entry point. Other sites can add their own implementation later.
+// Player captions are retried a few times (the first try at page load is the least reliable)
+// before the slower fallbacks: YouTube's transcript API, then the visible transcript panel.
+export async function getTranscript({ bridge, videoId, data, durationSec, log = () => {}, isStale = () => false }) {
+  for (let attempt = 1; attempt <= CONFIG.transcriptAttempts; attempt++) {
+    const lines = await tryCaptions({ bridge, videoId, log, isStale });
+    if (lines) return { lines, method: attempt === 1 ? 'captions' : `captions (attempt ${attempt})` };
+    if (isStale()) return null;
+    if (attempt < CONFIG.transcriptAttempts) {
+      log(`captions attempt ${attempt} failed, retrying in ${CONFIG.transcriptRetryMs} ms`);
+      await sleep(CONFIG.transcriptRetryMs);
+    }
   }
   if (isStale()) return null;
 

@@ -59,4 +59,6 @@ export const CONFIG = {
   // Transcript
   adWaitMs: 1000,
   adWaitTries: 180,
+  transcriptAttempts: 3, // player-captions tries before the API / panel fallbacks
+  transcriptRetryMs: 2500,
 };
