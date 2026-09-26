@@ -1,0 +1,7 @@
+{"events":[
+  {"tStartMs":0,"dDurationMs":1000,"wWinId":1},
+  {"tStartMs":0,"dDurationMs":2480,"segs":[{"utf8":"[Music]"}]},
+  {"tStartMs":320,"dDurationMs":4320,"segs":[{"utf8":"welcome"},{"utf8":" to the","tOffsetMs":320},{"utf8":"\nshow","tOffsetMs":900}]},
+  {"tStartMs":4640,"segs":[{"utf8":"\n"}]},
+  {"tStartMs":5000,"segs":[{"utf8":"last"}]}
+]}

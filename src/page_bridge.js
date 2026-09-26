@@ -3,7 +3,56 @@
   const REQ = 'jev-yt:req';
   const RES = 'jev-yt:res';
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const player = () => document.getElementById('movie_player');
+
+  // Capture the player's own /api/timedtext response, keyed by video id.
+  const captured = new Map();
+  function captureIfTimedtext(url, body) {
+    try {
+      if (typeof url !== 'string' || !url.includes('/api/timedtext')) return;
+      const videoId = new URL(url, location.href).searchParams.get('v');
+      if (!videoId) return;
+      captured.set(videoId, body);
+      while (captured.size > 5) captured.delete(captured.keys().next().value);
+    } catch {}
+  }
+
+  (() => {
+    try {
+      const origOpen = XMLHttpRequest.prototype.open;
+      const origSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        try { this.__jevYtUrl = url; } catch {}
+        return origOpen.call(this, method, url, ...rest);
+      };
+      XMLHttpRequest.prototype.send = function (...args) {
+        try {
+          this.addEventListener('load', () => {
+            try {
+              if (this.status >= 200 && this.status < 300) captureIfTimedtext(this.__jevYtUrl, this.responseText);
+            } catch {}
+          });
+        } catch {}
+        return origSend.apply(this, args);
+      };
+    } catch {}
+
+    try {
+      const origFetch = window.fetch;
+      window.fetch = function (input, init) {
+        const result = origFetch.call(this, input, init);
+        result.then((response) => {
+          try {
+            if (!response.ok) return;
+            const url = typeof input === 'string' ? input : input?.url;
+            response.clone().text().then((body) => captureIfTimedtext(url, body)).catch(() => {});
+          } catch {}
+        }).catch(() => {});
+        return result;
+      };
+    } catch {}
+  })();
 
   function candidates() {
     const out = [];
@@ -31,6 +80,59 @@
       const data = watchData(videoId);
       if (!data) return { ready: false };
       return { ready: true, duration: p.getDuration?.() ?? 0, title: vd.title ?? '', dataJson: JSON.stringify(data) };
+    },
+    async captions({ videoId, timeoutMs = 5000 }) {
+      if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
+
+      const p = player();
+      const vd = p?.getVideoData?.();
+      if (!vd || vd.video_id !== videoId) return { status: 'wrong-video' };
+
+      const btn = document.querySelector('.ytp-subtitles-button');
+      const wasOn = btn?.getAttribute('aria-pressed') === 'true';
+      let style;
+      try {
+        if (!wasOn) {
+          style = document.createElement('style');
+          style.id = 'jev-yt-hide-cc';
+          style.textContent = '.ytp-caption-window-container{visibility:hidden!important}';
+          document.head.appendChild(style);
+          p.loadModule('captions');
+        }
+
+        const isEnglish = (t) => t?.languageCode === 'en' || String(t?.languageCode ?? '').startsWith('en-');
+        let tracklist = [];
+        for (let i = 0; i < 10; i++) {
+          tracklist = p.getOption('captions', 'tracklist') ?? [];
+          if (tracklist.length) break;
+          await sleep(100);
+        }
+
+        let track;
+        if (!tracklist.length) {
+          track = { languageCode: 'en' };
+        } else {
+          track = tracklist.find((t) => isEnglish(t) && t.kind !== 'asr')
+            ?? tracklist.find((t) => isEnglish(t) && t.kind === 'asr');
+          if (!track) return { status: 'no-english' };
+        }
+
+        p.setOption('captions', 'track', track);
+
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
+          await sleep(100);
+        }
+        return { status: 'timeout' };
+      } finally {
+        try {
+          if (!wasOn) p.unloadModule('captions');
+        } catch {}
+        try {
+          style?.remove();
+        } catch {}
+      }
     },
     async fetchTranscript({ params }) {
       const cfg = window.ytcfg;

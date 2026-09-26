@@ -61,6 +61,19 @@ export function parseChapters(data) {
   return out.sort((a, b) => a.start - b.start);
 }
 
+export function parseJson3(json) {
+  const lines = [];
+  for (const ev of json?.events ?? []) {
+    if (!ev?.segs?.length) continue;
+    const start = Number(ev.tStartMs) / 1000;
+    const end = (Number(ev.tStartMs) + Number(ev.dDurationMs ?? 0)) / 1000;
+    const text = clean(ev.segs.map((s) => s.utf8 ?? '').join(''));
+    if (!text || !Number.isFinite(start)) continue;
+    lines.push({ start, end: Number.isFinite(end) ? end : start, text });
+  }
+  return fillEnds(lines);
+}
+
 export function linesFromPanel(rows, durationSec) {
   const lines = [];
   for (const row of rows) {

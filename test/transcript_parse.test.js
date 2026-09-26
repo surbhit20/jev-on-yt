@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  findAll, findTranscriptParams, parseTranscriptResponse, parseChapters, linesFromPanel,
+  findAll, findTranscriptParams, parseTranscriptResponse, parseChapters, linesFromPanel, parseJson3,
 } from '../src/transcript_parse.js';
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -45,6 +45,16 @@ test('parseChapters: sorted, deduped', () => {
   assert.deepEqual(parseChapters(data), expected);
   assert.deepEqual(parseChapters(dup), expected);
   assert.deepEqual(parseChapters({}), []);
+});
+
+test('parseJson3: skips no-segs and empty-text events, cleans, fills ends', () => {
+  const lines = parseJson3(fixture('timedtext_json3.json'));
+  assert.deepEqual(lines, [
+    { start: 0, end: 2.48, text: '[Music]' },
+    { start: 0.32, end: 4.64, text: 'welcome to the show' },
+    { start: 5, end: 7, text: 'last' },
+  ]);
+  assert.deepEqual(parseJson3({}), []);
 });
 
 test('linesFromPanel: drops bad rows, ends at next start or duration', () => {
