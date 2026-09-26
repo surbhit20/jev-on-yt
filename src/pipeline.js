@@ -29,7 +29,7 @@ export async function runQuery({ windows, query, call, limit, model }) {
 }
 
 export async function runStart({ windows, call, limit, model }) {
-  const { out } = await fanOut(windows, limit, async (win, i) => {
+  const { out, failed } = await fanOut(windows, limit, async (win, i) => {
     const { data } = await call(buildStartRequest(win, model), `start w${i}`);
     return readStartAnswers(win, data);
   });
@@ -38,7 +38,7 @@ export async function runStart({ windows, call, limit, model }) {
     if (r?.error) continue;
     for (const [id, v] of Object.entries(r)) if (start[id] == null) start[id] = v;
   }
-  return { start };
+  return { start, failed };
 }
 
 export async function runRefine({ lines, offset, query, call, model, maxLines }) {

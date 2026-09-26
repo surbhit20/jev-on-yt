@@ -55,8 +55,8 @@ const handlers = {
     if (!inflight.has(key)) {
       const job = (async () => {
         const call = makeCall(await getKey());
-        const { start } = await runStart({ windows, call, limit: CONFIG.concurrency, model: CONFIG.model });
-        await cacheSet(key, start);
+        const { start, failed } = await runStart({ windows, call, limit: CONFIG.concurrency, model: CONFIG.model });
+        if (!failed.length) await cacheSet(key, start);
         return start;
       })().finally(() => inflight.delete(key));
       inflight.set(key, job);

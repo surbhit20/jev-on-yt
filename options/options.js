@@ -21,11 +21,15 @@ $('save').addEventListener('click', async () => {
 
 $('test').addEventListener('click', async () => {
   setStatus('Testing…');
-  const res = await chrome.runtime.sendMessage({ type: 'testKey', apiKey: $('key').value.trim() || undefined });
-  if (res?.ok) {
-    const tokens = res.result.usage?.input_tokens;
-    setStatus(`Key works (${res.result.ms} ms${tokens != null ? `, ${tokens} input tokens` : ''}).`);
-  } else {
-    setStatus(MESSAGES[res?.error?.status] ?? `Error: ${res?.error?.message ?? 'unknown'}`);
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'testKey', apiKey: $('key').value.trim() || undefined });
+    if (res?.ok) {
+      const tokens = res.result.usage?.input_tokens;
+      setStatus(`Key works (${res.result.ms} ms${tokens != null ? `, ${tokens} input tokens` : ''}).`);
+    } else {
+      setStatus(MESSAGES[res?.error?.status] ?? `Error: ${res?.error?.message ?? 'unknown'}`);
+    }
+  } catch (e) {
+    setStatus(`Error: ${e?.message ?? 'unknown'}`);
   }
 });

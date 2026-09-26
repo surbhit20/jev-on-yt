@@ -51,6 +51,13 @@ test('runQuery throws on 401 and when all windows fail', async () => {
 test('runStart merges windows into one map', async () => {
   const r = await runStart({ windows, call: fakeCall(), limit: 10, model: 'm' });
   assert.deepEqual(r.start, { C000: 0.5, C001: 0.5, C002: 0.5 });
+  assert.deepEqual(r.failed, []);
+});
+
+test('runStart tolerates one failed window (529), returning the other window\'s values', async () => {
+  const r = await runStart({ windows, call: fakeCall({ failWindow: 1, status: 529 }), limit: 10, model: 'm' });
+  assert.deepEqual(r.failed, [1]);
+  assert.deepEqual(r.start, { C000: 0.5, C001: 0.5 });
 });
 
 test('runRefine returns an absolute line index, null on failure', async () => {

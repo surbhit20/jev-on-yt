@@ -15,12 +15,20 @@
 
   // Capture the player's own /api/timedtext response, keyed by video id.
   const captured = new Map();
+  const isEnglishLang = (lang) => lang === 'en' || String(lang ?? '').startsWith('en-');
+  const capturedIsEnglish = (entry) => !!entry && isEnglishLang(entry.lang) && !entry.tlang;
   function captureIfTimedtext(url, body) {
     try {
       if (typeof url !== 'string' || !url.includes('/api/timedtext')) return;
-      const videoId = new URL(url, location.href).searchParams.get('v');
+      const u = new URL(url, location.href);
+      const videoId = u.searchParams.get('v');
       if (!videoId) return;
-      captured.set(videoId, body);
+      captured.set(videoId, {
+        body,
+        lang: u.searchParams.get('lang') ?? '',
+        kind: u.searchParams.get('kind') ?? '',
+        tlang: u.searchParams.get('tlang') ?? '',
+      });
       while (captured.size > MAX_CAPTURED) captured.delete(captured.keys().next().value);
     } catch {}
   }
@@ -37,7 +45,12 @@
         try {
           this.addEventListener('load', () => {
             try {
-              if (this.status >= 200 && this.status < 300) captureIfTimedtext(this.__jevYtUrl, this.responseText);
+              if (
+                this.status >= 200 && this.status < 300 &&
+                typeof this.__jevYtUrl === 'string' && this.__jevYtUrl.includes('/api/timedtext')
+              ) {
+                captureIfTimedtext(this.__jevYtUrl, this.responseText);
+              }
             } catch {}
           });
         } catch {}
@@ -53,6 +66,7 @@
           try {
             if (!response.ok) return;
             const url = typeof input === 'string' ? input : input?.url;
+            if (typeof url !== 'string' || !url.includes('/api/timedtext')) return;
             response.clone().text().then((body) => captureIfTimedtext(url, body)).catch(() => {});
           } catch {}
         }).catch(() => {});
@@ -88,11 +102,10 @@
       if (!vd || vd.video_id !== videoId) return { ready: false };
       const data = watchData(videoId);
       if (!data) return { ready: false };
-      return { ready: true, duration: p.getDuration?.() ?? 0, title: vd.title ?? '', dataJson: JSON.stringify(data) };
+      const duration = Number(p.getPlayerResponse?.()?.videoDetails?.lengthSeconds) || p.getDuration?.() || 0;
+      return { ready: true, duration, title: vd.title ?? '', dataJson: JSON.stringify(data) };
     },
     async captionsImpl({ videoId, timeoutMs = CAPTIONS_TIMEOUT_MS }) {
-      if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
-
       const p = player();
       const vd = p?.getVideoData?.();
       if (!vd || vd.video_id !== videoId) return { status: 'wrong-video' };
@@ -100,17 +113,36 @@
 
       const btn = document.querySelector('.ytp-subtitles-button');
       const wasOn = btn?.getAttribute('aria-pressed') === 'true';
+
+      if (wasOn) {
+        // CC is already on: just poll for what the player captures, without touching
+        // the user's chosen track.
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          if (captured.has(videoId)) {
+            const entry = captured.get(videoId);
+            return capturedIsEnglish(entry) ? { status: 200, body: entry.body } : { status: 'no-english' };
+          }
+          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
+          if (Date.now() >= deadline) return { status: 'timeout' };
+          await sleep(POLL_MS);
+        }
+      }
+
+      // CC is off. A previously captured entry is only useful if it's already English;
+      // otherwise fall through and force the English track.
+      if (captured.has(videoId) && capturedIsEnglish(captured.get(videoId))) {
+        return { status: 200, body: captured.get(videoId).body };
+      }
+
       let style;
       try {
-        if (!wasOn) {
-          style = document.createElement('style');
-          style.id = 'jev-yt-hide-cc';
-          style.textContent = '.ytp-caption-window-container{visibility:hidden!important}';
-          document.head.appendChild(style);
-          p.loadModule('captions');
-        }
+        style = document.createElement('style');
+        style.id = 'jev-yt-hide-cc';
+        style.textContent = '.ytp-caption-window-container{visibility:hidden!important}';
+        document.head.appendChild(style);
+        p.loadModule('captions');
 
-        const isEnglish = (t) => t?.languageCode === 'en' || String(t?.languageCode ?? '').startsWith('en-');
         let tracklist = [];
         for (let i = 0; i < TRACKLIST_POLL_TRIES; i++) {
           if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
@@ -123,8 +155,8 @@
         if (!tracklist.length) {
           track = { languageCode: 'en' };
         } else {
-          track = tracklist.find((t) => isEnglish(t) && t.kind !== 'asr')
-            ?? tracklist.find((t) => isEnglish(t) && t.kind === 'asr');
+          track = tracklist.find((t) => isEnglishLang(t?.languageCode) && t.kind !== 'asr')
+            ?? tracklist.find((t) => isEnglishLang(t?.languageCode) && t.kind === 'asr');
           if (!track) return { status: 'no-english' };
         }
 
@@ -132,14 +164,16 @@
 
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
-          if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
+          if (captured.has(videoId) && capturedIsEnglish(captured.get(videoId))) {
+            return { status: 200, body: captured.get(videoId).body };
+          }
           if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
           await sleep(POLL_MS);
         }
         return { status: 'timeout' };
       } finally {
         try {
-          if (!wasOn) p.unloadModule('captions');
+          p.unloadModule('captions');
         } catch {}
         try {
           style?.remove();

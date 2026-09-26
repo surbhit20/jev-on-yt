@@ -68,8 +68,11 @@
       video.status = 'unavailable';
       return log('No transcript for this video');
     }
+    // info.duration can be the pre-roll ad's duration (or 0); the transcript's own
+    // last line end is a better floor once we have it.
+    const durationSec = Math.max(info.duration || 0, result.lines.at(-1)?.end || 0);
 
-    const chunkSec = chunker.chunkSecondsFor(info.duration, CONFIG.chunkRules);
+    const chunkSec = chunker.chunkSecondsFor(durationSec, CONFIG.chunkRules);
     const chunks = chunker.buildChunks(result.lines, chunkSec, CONFIG.sentenceSlack);
     const windows = chunker.buildWindows(chunks, CONFIG.windowSize, CONFIG.windowOverlap);
     const startPromise = chapters.length
@@ -82,7 +85,7 @@
         });
 
     Object.assign(video, {
-      status: 'ready', lines: result.lines, chapters, chunks, windows, startPromise, durationSec: info.duration,
+      status: 'ready', lines: result.lines, chapters, chunks, windows, startPromise, durationSec,
     });
     log(`${videoId} "${info.title}" ready via ${result.method} in ${Math.round(performance.now() - t0)} ms: ` +
       `${result.lines.length} lines → ${chunks.length} chunks of ~${chunkSec}s → ${windows.length} windows; ` +
@@ -95,6 +98,7 @@
   }
 
   function cycle(dir) {
+    if (last?.kind === 'absent') return log('no matches to cycle');
     const segs = last?.segments ?? [];
     if (!segs.length) return log('no matches to cycle');
     cursor = (cursor + dir + segs.length) % segs.length;

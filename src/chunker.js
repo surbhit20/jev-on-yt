@@ -41,7 +41,7 @@ export function buildChunks(lines, targetSec, slack) {
 
 export function buildWindows(chunks, size, overlap) {
   const windows = [];
-  const step = size - overlap;
+  const step = Math.max(1, size - overlap);
   for (let s = 0; s < chunks.length; s += step) {
     windows.push(chunks.slice(s, s + size));
     if (s + size >= chunks.length) break;

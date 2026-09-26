@@ -63,6 +63,13 @@ test('buildWindows: size and 1-chunk overlap', () => {
   assert.deepEqual(buildWindows([], 30, 1), []);
 });
 
+test('buildWindows: overlap >= size terminates and covers the last chunk', () => {
+  const chunks = Array.from({ length: 5 }, (_, i) => ({ id: chunkId(i) }));
+  const w = buildWindows(chunks, 2, 2);
+  assert.ok(w.length > 0 && w.length < Infinity);
+  assert.equal(w.at(-1).at(-1).id, 'C004');
+});
+
 test('windowState formats one line per chunk', () => {
   const s = windowState([
     { id: 'C000', start: 0, text: 'hello' },
