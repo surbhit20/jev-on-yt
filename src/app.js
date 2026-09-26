@@ -32,7 +32,8 @@ export function start() {
   let last = null; // last decision
   let cursor = -1; // index into last.segments for next/back
   let queued = null; // text asked while preparing
-  let readyNotice = false; // the "Getting things ready" toast is up; update it when prep ends
+  let readyNotice = false; // the user waited on prep; say "Ready" when it ends
+  let preparingShown = false; // "Getting things ready" is on screen from a Control hold
   let searchSeq = 0; // guards against out-of-order search() calls for the same video
   let searching = false;
 
@@ -85,6 +86,7 @@ export function start() {
     if (queued || readyNotice) {
       queued = null;
       readyNotice = false;
+      preparingShown = false;
       toast.show({ title: 'No transcript for this video', dismissMs: CONFIG.toastMs.info });
     }
   }
@@ -99,6 +101,7 @@ export function start() {
       cursor = -1;
       queued = null;
       readyNotice = false;
+      preparingShown = false;
       voice.abort();
       media.reset();
       listening = null;
@@ -141,6 +144,7 @@ export function start() {
 
     if (readyNotice) {
       readyNotice = false;
+      preparingShown = false;
       toast.show({ title: 'Ready', body: 'Hold Control to ask.', dismissMs: CONFIG.toastMs.info });
     }
     if (queued) {
@@ -151,9 +155,12 @@ export function start() {
   }
 
   // Control while preparing: no mic, just a clear wait state that updates itself when prep ends.
-  function showPreparing() {
+  function showPreparing(dismissMs = 0) {
     readyNotice = true;
-    toast.show({ loading: true, title: 'Getting things ready', body: 'Reading the transcript. This takes a few seconds.' });
+    preparingShown = true;
+    toast.show({
+      loading: true, title: 'Getting things ready', body: 'Reading the transcript. This takes a few seconds.', dismissMs,
+    });
     if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
   }
 
@@ -357,6 +364,10 @@ export function start() {
           ?? { setTitle() {}, setBody() {} };
       },
       async holdEnd() {
+        if (preparingShown) {
+          preparingShown = false;
+          toast.hide(); // released during prep: slide the wait toast away
+        }
         if (!listening) return;
         listening = null;
         const { text, error } = await voice.stop();
@@ -385,7 +396,11 @@ export function start() {
       },
       doubleTap() {
         if (!video.id) return;
-        if (video.status !== 'ready') return showPreparing();
+        if (video.status !== 'ready') {
+          showPreparing(CONFIG.toastMs.info);
+          preparingShown = false; // no hold to release; it dismisses itself
+          return;
+        }
         toast.show({
           title: 'Ask this video',
           input: { placeholder: 'e.g. caffeine and sleep', onSubmit: (t) => submit(t) },

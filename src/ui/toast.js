@@ -1,5 +1,6 @@
 // Wispr-style toast inside the YouTube player. Text is set with textContent only.
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const LEAVE_MS = 320; // matches .jev-leaving transition in overlay.css
 // Stop these from reaching the player (clicks would toggle play/pause, keys would trigger shortcuts).
 const SWALLOW = ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'keydown', 'keyup', 'keypress', 'wheel'];
 
@@ -14,11 +15,25 @@ export function createToast() {
   let root = null;
   let timer = null;
 
-  function hide() {
+  // Remove at once (used when a new toast replaces the current one).
+  function discard() {
     clearTimeout(timer);
     timer = null;
     root?.remove();
     root = null;
+  }
+
+  // Animated exit: the toast slides off the right edge of the player, then is removed.
+  function hide() {
+    clearTimeout(timer);
+    timer = null;
+    if (!root) return;
+    const leaving = root;
+    root = null;
+    leaving.classList.add('jev-leaving');
+    const remove = () => leaving.remove();
+    leaving.addEventListener('transitionend', remove, { once: true });
+    setTimeout(remove, LEAVE_MS + 100); // in case transitionend never fires
   }
 
   // YouTube-style spinner: an arc that grows and shrinks while it rotates.
@@ -61,7 +76,7 @@ export function createToast() {
   }
 
   function show({ title = '', body = '', actions = [], dismissMs = 0, input = null, loading = false }) {
-    hide();
+    discard();
     const host = document.getElementById('movie_player');
     if (!host) return null;
 
