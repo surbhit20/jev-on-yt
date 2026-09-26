@@ -31,6 +31,8 @@ export function start() {
   let last = null; // last decision
   let cursor = -1; // index into last.segments for next/back
   let queued = null; // text asked while preparing
+  let searchSeq = 0; // guards against out-of-order search() calls for the same video
+  let searching = false;
 
   async function send(msg) {
     const res = await chrome.runtime.sendMessage(msg);
@@ -91,6 +93,8 @@ export function start() {
       last = null;
       cursor = -1;
       queued = null;
+      voice.abort();
+      listening = null;
     }
     const gen = ++video.gen;
     Object.assign(video, {
@@ -103,7 +107,12 @@ export function start() {
     const info = await waitForInfo(videoId, gen);
     if (gen !== video.gen) return;
     if (!info) return markUnavailable(`no player data for ${videoId}`);
-    const data = JSON.parse(info.dataJson);
+    let data;
+    try {
+      data = JSON.parse(info.dataJson);
+    } catch {
+      return markUnavailable('bad player data');
+    }
     const chapters = parseChapters(data);
     const result = await getTranscript({
       bridge, videoId, data, durationSec: info.duration, log, isStale: () => gen !== video.gen,
@@ -206,73 +215,80 @@ export function start() {
   }
 
   async function search(parsed) {
-    const { id: videoId, gen, chunks, windows, durationSec } = video;
-    const t0 = performance.now();
-    toast.show({ icon: '🔎', title: `Searching "${parsed.query}"…` });
-    heatmap.shimmer(true);
-
-    let d;
+    const seq = ++searchSeq;
+    searching = true;
     try {
-      const res = await send({ type: 'query', videoId, windows, query: parsed.query });
-      if (gen !== video.gen) return;
-      let st = await video.startPromise;
-      if (!st.ok && gen === video.gen) {
-        video.startPromise = startPass(videoId, chunks, windows, video.chapters);
-        st = await video.startPromise;
+      const { id: videoId, gen, chunks, windows, durationSec } = video;
+      const t0 = performance.now();
+      const stale = () => gen !== video.gen || seq !== searchSeq;
+      toast.show({ icon: '🔎', title: `Searching "${parsed.query}"…` });
+      heatmap.shimmer(true);
+
+      let d;
+      try {
+        const res = await send({ type: 'query', videoId, windows, query: parsed.query });
+        if (stale()) return;
+        let st = await video.startPromise;
+        if (!st.ok && !stale()) {
+          video.startPromise = startPass(videoId, chunks, windows, video.chapters);
+          st = await video.startPromise;
+        }
+        if (stale()) return;
+        const rel = scoring.mergeByChunk(chunks.length, res.perWindow.map((w) => w?.rel));
+        d = scoring.decide({
+          chunks, rel, start: st.start,
+          bests: res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null)),
+          exists: res.perWindow.map((w) => w?.exists ?? null),
+          unknown: rel.map((v) => v == null),
+          highlightOnly: parsed.highlightOnly,
+          config: CONFIG,
+        });
+        log(`"${parsed.query}": ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
+          `failedWindows=${JSON.stringify(res.failed)}, cached=${res.cached}`);
+      } catch (err) {
+        if (stale()) return;
+        heatmap.shimmer(false);
+        return showError(err);
       }
-      if (gen !== video.gen) return;
-      const rel = scoring.mergeByChunk(chunks.length, res.perWindow.map((w) => w?.rel));
-      d = scoring.decide({
-        chunks, rel, start: st.start,
-        bests: res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null)),
-        exists: res.perWindow.map((w) => w?.exists ?? null),
-        unknown: rel.map((v) => v == null),
-        highlightOnly: parsed.highlightOnly,
-        config: CONFIG,
-      });
-      log(`"${parsed.query}": ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
-        `failedWindows=${JSON.stringify(res.failed)}, cached=${res.cached}`);
-    } catch (err) {
-      if (gen !== video.gen) return;
+
       heatmap.shimmer(false);
-      return showError(err);
-    }
+      last = d;
+      cursor = -1;
 
-    heatmap.shimmer(false);
-    last = d;
-    cursor = -1;
-
-    if (d.kind === 'absent') {
-      heatmap.clear();
-      toast.show({
-        icon: '∅', title: 'Not discussed in this video',
-        body: `Nothing about "${parsed.query}".`, dismissMs: CONFIG.toastMs.absent,
-      });
-    } else {
-      heatmap.render({ chunks, heat: d.heat, durationSec, floor: CONFIG.heatFloor });
-      if (d.kind === 'jump') {
-        const time = await refineTime(d, parsed.query, gen);
-        if (gen !== video.gen) return;
-        const prev = currentTime();
-        seek(time);
-        cursor = 0;
-        heatmap.pulse(d.target.from, d.target.to, CONFIG.pulseMs);
-        heatmap.reveal(CONFIG.revealMs);
+      if (d.kind === 'absent') {
+        heatmap.clear();
         toast.show({
-          icon: '✓', title: `Jumped to ${formatTime(time)}`,
-          body: d.segments.length > 1 ? `${spotsLabel(d.segments.length)} found · → for the next one` : '',
-          actions: [
-            { label: 'Undo', onClick: () => undo(prev) },
-            { label: 'Show all', primary: true, onClick: showAll },
-          ],
-          dismissMs: CONFIG.toastMs.jump,
+          icon: '∅', title: 'Not discussed in this video',
+          body: `Nothing about "${parsed.query}".`, dismissMs: CONFIG.toastMs.absent,
         });
       } else {
-        showAll();
+        heatmap.render({ chunks, heat: d.heat, durationSec, floor: CONFIG.heatFloor });
+        if (d.kind === 'jump') {
+          const time = await refineTime(d, parsed.query, gen);
+          if (stale()) return;
+          const prev = currentTime();
+          seek(time);
+          cursor = 0;
+          heatmap.pulse(d.target.from, d.target.to, CONFIG.pulseMs);
+          heatmap.reveal(CONFIG.revealMs);
+          toast.show({
+            icon: '✓', title: `Jumped to ${formatTime(time)}`,
+            body: d.segments.length > 1 ? `${spotsLabel(d.segments.length)} found · → for the next one` : '',
+            actions: [
+              { label: 'Undo', onClick: () => undo(prev) },
+              { label: 'Show all', primary: true, onClick: showAll },
+            ],
+            dismissMs: CONFIG.toastMs.jump,
+          });
+        } else {
+          showAll();
+        }
       }
+      log(`total ${Math.round(performance.now() - t0)} ms`);
+      return d;
+    } finally {
+      if (seq === searchSeq) searching = false;
     }
-    log(`total ${Math.round(performance.now() - t0)} ms`);
-    return d;
   }
 
   async function submit(text) {
@@ -290,7 +306,7 @@ export function start() {
     if (video.status === 'preparing' || video.status === 'unavailable') {
       queued = text;
       toast.show({ icon: '⏳', title: 'Getting things ready…', body: `I'll search "${parsed.query}" when it's ready.` });
-      if (video.status === 'unavailable') prepare(true);
+      if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
       return;
     }
     return search(parsed);
@@ -326,8 +342,16 @@ export function start() {
         if (!listening) return;
         listening = null;
         const { text, error } = await voice.stop();
-        if (error === 'not-allowed' || error === 'service-not-allowed') {
+        if (error === 'aborted') return;
+        if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') {
           toast.show({ icon: '⚠', title: 'Mic blocked', body: 'Double-tap Right Option to type instead.' });
+          return;
+        }
+        if (error && error !== 'no-speech' && !text) {
+          toast.show({
+            icon: '⚠', title: "Voice didn't work",
+            body: 'Double-tap Right Option to type instead.', dismissMs: CONFIG.toastMs.info,
+          });
           return;
         }
         submit(text);
@@ -361,6 +385,7 @@ export function start() {
       },
       arrow(dir) {
         if (!toast.isOpen() || !last?.segments?.length || last.kind === 'absent') return false;
+        if (searching || video.status !== 'ready') return false;
         return cycle(dir);
       },
     },
@@ -371,8 +396,8 @@ export function start() {
   window.addEventListener('keyup', (e) => { if (keys.keyup(e)) swallow(e); }, true);
   window.addEventListener('mousedown', () => keys.mousedown(), true);
   window.addEventListener('blur', () => keys.blur());
-  document.addEventListener('yt-navigate-finish', () => prepare());
+  document.addEventListener('yt-navigate-finish', () => prepare().catch((e) => log('prepare failed:', e.message)));
 
   globalThis.jev = { ask: submit, video, get last() { return last; } };
-  prepare();
+  prepare().catch((e) => log('prepare failed:', e.message));
 }

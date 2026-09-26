@@ -14,6 +14,8 @@ export function createVoice({ lang, onInterim }) {
     rec = null;
     const toResolve = pending;
     pending = [];
+    r.onresult = null;
+    r.onerror = null;
     r.onend = null;
     try { r.abort(); } catch {}
     // Flush all pending resolvers with aborted error

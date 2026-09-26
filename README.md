@@ -22,6 +22,8 @@ Scoring uses [TypeSafe](https://typesafe.ai)'s Jev model with your own API key.
 | Undo a jump | **Undo** in the toast |
 | Clear highlights | **Esc** |
 
+The first time you hold Right Option, Chrome asks for microphone access for youtube.com.
+
 Questions that start with "show", "where", "find" or "highlight" only highlight, never jump.
 
 ## Privacy
@@ -29,6 +31,7 @@ Questions that start with "show", "where", "find" or "highlight" only highlight,
 - Your API key is stored in this browser (`chrome.storage.local`) and sent only to `api.typesafe.ai`.
 - The transcript of the video you're watching and your question are sent to TypeSafe to score.
 - While Right Option is held, Chrome's built-in speech recognition sends your voice to Google.
+- Voice uses Chrome's speech recognition on youtube.com, so Chrome asks to allow the microphone for youtube.com; that permission also lets YouTube itself use the mic.
 - Nothing else leaves the browser. No analytics.
 
 ## Development

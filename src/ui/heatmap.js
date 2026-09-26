@@ -28,10 +28,6 @@ export function createHeatmap({ onCellClick, revealTickMs }) {
     d.style.left = `${c.left}%`;
     d.style.width = `${c.width}%`;
     d.style.setProperty('--jev-a', c.alpha.toFixed(2));
-    // Keep YouTube from starting its own scrub when a cell is clicked.
-    for (const type of ['pointerdown', 'mousedown']) {
-      d.addEventListener(type, (e) => { e.stopPropagation(); e.preventDefault(); });
-    }
     d.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
