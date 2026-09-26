@@ -1,0 +1,7 @@
+{"actions":[{"updateEngagementPanelAction":{"content":{"transcriptRenderer":{"content":{"transcriptSearchPanelRenderer":{"body":{"transcriptSegmentListRenderer":{"initialSegments":[
+  {"transcriptSectionHeaderRenderer":{"startMs":"0","endMs":"60000","snippet":{"simpleText":"Intro"}}},
+  {"transcriptSegmentRenderer":{"startMs":"0","endMs":"4200","snippet":{"runs":[{"text":"Welcome to the\nshow."}]}}},
+  {"transcriptSegmentRenderer":{"startMs":"4200","endMs":"9000","snippet":{"runs":[{"text":"Today we talk "},{"text":"about sleep."}]}}},
+  {"transcriptSegmentRenderer":{"startMs":"9000","endMs":"9000","snippet":{"runs":[{"text":"[Music]"}]}}},
+  {"transcriptSegmentRenderer":{"startMs":"12000","endMs":"15000","snippet":{"runs":[{"text":"  "}]}}}
+]}}}}}}}}]}

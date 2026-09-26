@@ -1,0 +1,14 @@
+{
+  "currentVideoEndpoint": {"watchEndpoint": {"videoId": "abc123"}},
+  "engagementPanels": [{"engagementPanelSectionListRenderer": {
+    "targetId": "engagement-panel-searchable-transcript",
+    "content": {"continuationItemRenderer": {"continuationEndpoint": {"getTranscriptEndpoint": {"params": "CgtQQVJBTVM="}}}}
+  }}],
+  "playerOverlays": {"playerOverlayRenderer": {"decoratedPlayerBarRenderer": {"decoratedPlayerBarRenderer": {"playerBar": {"multiMarkersPlayerBarRenderer": {"markersMap": [
+    {"key": "DESCRIPTION_CHAPTERS", "value": {"chapters": [
+      {"chapterRenderer": {"title": {"simpleText": "Intro"}, "timeRangeStartMillis": 0}},
+      {"chapterRenderer": {"title": {"simpleText": "Caffeine"}, "timeRangeStartMillis": 754000}},
+      {"chapterRenderer": {"title": {"simpleText": "Sleep"}, "timeRangeStartMillis": 2410000}}
+    ]}}
+  ]}}}}}}
+}
