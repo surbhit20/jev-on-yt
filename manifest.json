@@ -16,8 +16,7 @@
         "src/config.js", "src/bridge_client.js", "src/transcript.js", "src/transcript_parse.js",
         "src/time.js", "src/chunker.js", "src/query.js", "src/scoring.js"
       ],
-      "matches": ["https://www.youtube.com/*"],
-      "use_dynamic_url": true
+      "matches": ["https://www.youtube.com/*"]
     }
   ],
   "options_page": "options/options.html"
