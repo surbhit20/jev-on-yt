@@ -37,6 +37,13 @@ export const CONFIG = {
 
   // UI
   revealMs: 5000,
+  revealTickMs: 800,
+  heatFloor: 0.2,
+  pulseMs: 1500,
+  toastMs: { jump: 4000, highlight: 6000, absent: 4000, info: 3000 },
+  holdMs: 250,
+  doubleTapMs: 350,
+  voiceLang: 'en-US',
 
   // Transcript
   adWaitMs: 1000,
