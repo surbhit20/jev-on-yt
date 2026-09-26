@@ -69,3 +69,12 @@ test('linesFromPanel: drops bad rows, ends at next start or duration', () => {
     { start: 4, end: 20, text: 'there' },
   ]);
 });
+
+test('linesFromPanel: rows sharing a timestamp end at the next later start, not the video end', () => {
+  const rows = [
+    { ts: '0:04', text: 'a' },
+    { ts: '0:04', text: 'b' },
+    { ts: '0:07', text: 'c' },
+  ];
+  assert.deepEqual(linesFromPanel(rows, 8338).map((l) => l.end), [7, 7, 8338]);
+});

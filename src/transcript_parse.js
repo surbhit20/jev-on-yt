@@ -29,8 +29,9 @@ function fillEnds(lines, fallbackEnd) {
   lines.sort((a, b) => a.start - b.start);
   lines.forEach((l, i) => {
     if (l.end > l.start) return;
-    const next = lines[i + 1]?.start;
-    l.end = next > l.start ? next : (fallbackEnd ?? l.start + 2);
+    // Panel timestamps have 1 s resolution, so neighbours can share a start: use the next later one.
+    const next = lines.slice(i + 1).find((n) => n.start > l.start)?.start;
+    l.end = next ?? fallbackEnd ?? l.start + 2;
   });
   return lines;
 }
