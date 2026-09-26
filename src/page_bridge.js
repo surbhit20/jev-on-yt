@@ -6,6 +6,13 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const player = () => document.getElementById('movie_player');
 
+  // Mirror config.js-style tunables: this is a classic MAIN-world script and can't import
+  // src/config.js (module-only), so these timing constants live here instead.
+  const CAPTIONS_TIMEOUT_MS = 5000;
+  const TRACKLIST_POLL_TRIES = 10;
+  const POLL_MS = 100;
+  const MAX_CAPTURED = 5;
+
   // Capture the player's own /api/timedtext response, keyed by video id.
   const captured = new Map();
   function captureIfTimedtext(url, body) {
@@ -14,7 +21,7 @@
       const videoId = new URL(url, location.href).searchParams.get('v');
       if (!videoId) return;
       captured.set(videoId, body);
-      while (captured.size > 5) captured.delete(captured.keys().next().value);
+      while (captured.size > MAX_CAPTURED) captured.delete(captured.keys().next().value);
     } catch {}
   }
 
@@ -72,6 +79,8 @@
     return candidates().find((d) => d?.currentVideoEndpoint?.watchEndpoint?.videoId === videoId) ?? null;
   }
 
+  let captionsQueue = Promise.resolve();
+
   const handlers = {
     videoInfo({ videoId }) {
       const p = player();
@@ -81,7 +90,7 @@
       if (!data) return { ready: false };
       return { ready: true, duration: p.getDuration?.() ?? 0, title: vd.title ?? '', dataJson: JSON.stringify(data) };
     },
-    async captions({ videoId, timeoutMs = 5000 }) {
+    async captionsImpl({ videoId, timeoutMs = CAPTIONS_TIMEOUT_MS }) {
       if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
 
       const p = player();
@@ -103,10 +112,11 @@
 
         const isEnglish = (t) => t?.languageCode === 'en' || String(t?.languageCode ?? '').startsWith('en-');
         let tracklist = [];
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < TRACKLIST_POLL_TRIES; i++) {
+          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
           tracklist = p.getOption('captions', 'tracklist') ?? [];
           if (tracklist.length) break;
-          await sleep(100);
+          await sleep(POLL_MS);
         }
 
         let track;
@@ -123,7 +133,8 @@
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
           if (captured.has(videoId)) return { status: 200, body: captured.get(videoId) };
-          await sleep(100);
+          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
+          await sleep(POLL_MS);
         }
         return { status: 'timeout' };
       } finally {
@@ -134,6 +145,15 @@
           style?.remove();
         } catch {}
       }
+    },
+    // Serialize captions() calls so only one runs at a time: a stale call from a
+    // superseded video navigation must finish (and restore player state in its
+    // `finally`) before the next call touches loadModule/setOption, or the two can
+    // stomp on each other's caption-module state.
+    captions(payload) {
+      const run = captionsQueue.then(() => handlers.captionsImpl(payload));
+      captionsQueue = run.catch(() => {});
+      return run;
     },
     async fetchTranscript({ params }) {
       const cfg = window.ytcfg;
