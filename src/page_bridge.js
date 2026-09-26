@@ -9,9 +9,10 @@
   // Mirror config.js-style tunables: this is a classic MAIN-world script and can't import
   // src/config.js (module-only), so these timing constants live here instead.
   const CAPTIONS_TIMEOUT_MS = 5000;
-  const TRACKLIST_POLL_TRIES = 10;
   const POLL_MS = 100;
   const MAX_CAPTURED = 5;
+  const WAS_ON_KICK_MS = 2000; // CC on but nothing downloaded yet: toggle CC to force a download
+  const TRACK_SWITCH_AFTER_MS = 1500; // CC turned on by us: then request an English track explicitly
 
   // Capture the player's own /api/timedtext response, keyed by video id.
   const captured = new Map();
@@ -114,66 +115,79 @@
       const btn = document.querySelector('.ytp-subtitles-button');
       const wasOn = btn?.getAttribute('aria-pressed') === 'true';
 
+      const pickEnglish = (list) => list.find((t) => isEnglishLang(t?.languageCode) && t.kind !== 'asr')
+        ?? list.find((t) => isEnglishLang(t?.languageCode) && t.kind === 'asr');
+      const englishBody = () => {
+        const entry = captured.get(videoId);
+        return capturedIsEnglish(entry) ? entry.body : null;
+      };
+      const stale = () => p.getVideoData?.()?.video_id !== videoId;
+
       if (wasOn) {
-        // CC is already on: just poll for what the player captures, without touching
-        // the user's chosen track.
-        const deadline = Date.now() + timeoutMs;
+        // CC is already on: wait for the player's own download without touching the user's track.
+        // If nothing arrives soon (paused video, slow start), toggle CC off and on to make the
+        // player download again; CC ends up on, as the user had it.
+        const start = Date.now();
+        let kicked = false;
         for (;;) {
-          if (captured.has(videoId)) {
-            const entry = captured.get(videoId);
-            return capturedIsEnglish(entry) ? { status: 200, body: entry.body } : { status: 'no-english' };
+          const body = englishBody();
+          if (body) return { status: 200, body };
+          if (captured.has(videoId)) return { status: 'no-english' };
+          if (stale()) return { status: 'wrong-video' };
+          if (Date.now() - start >= timeoutMs) return { status: 'timeout' };
+          if (!kicked && btn && Date.now() - start >= WAS_ON_KICK_MS) {
+            kicked = true;
+            btn.click();
+            await sleep(POLL_MS);
+            if (btn.getAttribute('aria-pressed') !== 'true') btn.click();
           }
-          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
-          if (Date.now() >= deadline) return { status: 'timeout' };
           await sleep(POLL_MS);
         }
       }
 
-      // CC is off. A previously captured entry is only useful if it's already English;
-      // otherwise fall through and force the English track.
-      if (captured.has(videoId) && capturedIsEnglish(captured.get(videoId))) {
-        return { status: 200, body: captured.get(videoId).body };
-      }
+      // CC is off. A previously captured entry is only useful if it's already English.
+      if (englishBody()) return { status: 200, body: englishBody() };
 
       let style;
+      let pressed = false;
       try {
         style = document.createElement('style');
         style.id = 'jev-yt-hide-cc';
         style.textContent = '.ytp-caption-window-container{visibility:hidden!important}';
         document.head.appendChild(style);
-        p.loadModule('captions');
-
-        let tracklist = [];
-        for (let i = 0; i < TRACKLIST_POLL_TRIES; i++) {
-          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
-          tracklist = p.getOption('captions', 'tracklist') ?? [];
-          if (tracklist.length) break;
-          await sleep(POLL_MS);
-        }
-
-        let track;
-        if (!tracklist.length) {
-          track = { languageCode: 'en' };
+        // Turn captions on the way the user would; the hidden module call is only a fallback.
+        if (btn) {
+          btn.click();
+          pressed = true;
         } else {
-          track = tracklist.find((t) => isEnglishLang(t?.languageCode) && t.kind !== 'asr')
-            ?? tracklist.find((t) => isEnglishLang(t?.languageCode) && t.kind === 'asr');
-          if (!track) return { status: 'no-english' };
+          p.loadModule('captions');
         }
 
-        p.setOption('captions', 'track', track);
-
-        const deadline = Date.now() + timeoutMs;
-        while (Date.now() < deadline) {
-          if (captured.has(videoId) && capturedIsEnglish(captured.get(videoId))) {
-            return { status: 200, body: captured.get(videoId).body };
+        // Wait for the download. If nothing English has arrived after a moment, ask for an
+        // English track explicitly (the default track may be another language, or none).
+        const start = Date.now();
+        let switched = false;
+        while (Date.now() - start < timeoutMs) {
+          const body = englishBody();
+          if (body) return { status: 200, body };
+          if (stale()) return { status: 'wrong-video' };
+          if (!switched && (captured.has(videoId) || Date.now() - start >= TRACK_SWITCH_AFTER_MS)) {
+            switched = true;
+            const tracklist = p.getOption('captions', 'tracklist') ?? [];
+            const track = tracklist.length ? pickEnglish(tracklist) : { languageCode: 'en' };
+            if (!track) return { status: 'no-english' };
+            p.setOption('captions', 'track', track);
           }
-          if (p.getVideoData?.()?.video_id !== videoId) return { status: 'wrong-video' };
           await sleep(POLL_MS);
         }
         return { status: 'timeout' };
       } finally {
         try {
-          p.unloadModule('captions');
+          if (pressed) {
+            if (btn.getAttribute('aria-pressed') === 'true') btn.click(); // back off, as the user had it
+          } else {
+            p.unloadModule('captions');
+          }
         } catch {}
         try {
           style?.remove();
