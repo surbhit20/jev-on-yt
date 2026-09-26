@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Jev YT",
+  "version": "0.1.0",
+  "description": "Ask a YouTube video a question and jump to the answer.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*", "https://api.typesafe.ai/*"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "content_scripts": [
+    { "matches": ["https://www.youtube.com/*"], "js": ["src/page_bridge.js"], "world": "MAIN", "run_at": "document_start" },
+    { "matches": ["https://www.youtube.com/*"], "js": ["src/content.js"], "run_at": "document_idle" }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["src/*.js"], "matches": ["https://www.youtube.com/*"] }
+  ],
+  "options_page": "options/options.html"
+}
