@@ -10,7 +10,7 @@ async function fanOut(windows, limit, fn) {
     try {
       return await fn(win, i);
     } catch (e) {
-      if (e?.status === 401 || e?.status === 'nokey') fatal = e;
+      if (e?.status === 401 || e?.status === 403 || e?.status === 'nokey') fatal = e;
       return { error: e };
     }
   });

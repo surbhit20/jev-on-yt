@@ -75,3 +75,13 @@ test('stops fan-out after fatal 401 error', async () => {
   await assert.rejects(runQuery({ windows, query: 'q', limit: 1, model: 'm', call }), (e) => e.status === 401);
   assert.equal(callCount, 1);
 });
+
+test('stops fan-out after a 403 (key denied) too', async () => {
+  let callCount = 0;
+  const call = async () => {
+    callCount++;
+    throw new JevError(403, 'RBAC: access denied');
+  };
+  await assert.rejects(runQuery({ windows, query: 'q', limit: 1, model: 'm', call }), (e) => e.status === 403);
+  assert.equal(callCount, 1);
+});

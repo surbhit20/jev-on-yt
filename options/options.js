@@ -3,6 +3,7 @@ const setStatus = (t) => { $('status').textContent = t; };
 
 const MESSAGES = {
   401: 'Key rejected (401). Check it and try again.',
+  403: 'Access denied (403). Check your key or TypeSafe plan.',
   422: 'Request rejected (422). Please report this.',
   429: 'Rate limited (429). Try again shortly.',
   529: 'TypeSafe is overloaded (529). Try again shortly.',
