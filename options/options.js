@@ -53,7 +53,7 @@ $('osave').addEventListener('click', async () => {
   if (!value) {
     await chrome.storage.local.remove('openaiKey');
     await chrome.permissions.remove({ origins: [OPENAI_ORIGIN] }).catch(() => {});
-    setOStatus("Key removed. Voice uses Chrome's built-in recognition.");
+    setOStatus("Key removed. Voice uses Instant (Chrome's built-in recognition).");
     return;
   }
   // Must run straight from the click, before any other await, or Chrome refuses the prompt.
@@ -63,7 +63,7 @@ $('osave').addEventListener('click', async () => {
     return;
   }
   await chrome.storage.local.set({ openaiKey: value });
-  setOStatus('Saved. Voice now uses OpenAI.');
+  setOStatus('Saved. Choose Accurate from the Jev YT toolbar button to use it.');
 });
 
 $('otest').addEventListener('click', async () => {

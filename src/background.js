@@ -3,6 +3,7 @@ import { callJev, JevError } from './jev_client.js';
 import { runQuery, runStart, runRefine, runIntent } from './pipeline.js';
 import { buildTestRequest } from './request_builder.js';
 import { callTranscribe } from './openai_transcribe.js';
+import { resolveVoiceEngine, DEFAULT_VOICE_MODE } from './voice_mode.js';
 
 // Memory cache backed by storage.session (the worker can be killed when idle).
 const memo = new Map();
@@ -86,7 +87,8 @@ const handlers = {
   },
 
   async voiceMode() {
-    return { engine: (await openaiKey()) ? 'openai' : 'chrome' };
+    const { voiceMode = DEFAULT_VOICE_MODE } = await chrome.storage.local.get('voiceMode');
+    return { engine: resolveVoiceEngine(voiceMode, !!(await openaiKey())) };
   },
 
   async transcribe({ audio }) {
@@ -142,4 +144,3 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
-chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());

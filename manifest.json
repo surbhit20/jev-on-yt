@@ -66,7 +66,8 @@
   ],
   "options_page": "options/options.html",
   "action": {
-    "default_title": "Jev YT settings"
+    "default_title": "Jev YT",
+    "default_popup": "popup/popup.html"
   },
   "optional_host_permissions": [
     "https://api.openai.com/*"
