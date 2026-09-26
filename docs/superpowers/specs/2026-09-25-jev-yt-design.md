@@ -27,7 +27,7 @@ Distribution is bring your own key: the user pastes a TypeSafe API key on the op
 | Highlight/Jump toggle | Automatic (rule 1) plus phrasing override (rule 4) |
 | Alt+J / Alt+Shift+J | Hold Right Option / double-tap Right Option |
 | Floating panel | Wispr-style toast (see UI) |
-| Transcript: `baseUrl&fmt=json3`, then panel scrape | YouTube's internal transcript API, then panel scrape (confirmed in Phase 0) |
+| Transcript: `baseUrl&fmt=json3`, then panel scrape | Capture the player's own caption download (Phase 0 finding), then YouTube's internal transcript API, then panel scrape |
 | Fixed 30 s chunks | Adaptive chunk size (see Chunking) |
 | `start_` pass on first query | Chapters when present; otherwise `start_` pass during prep |
 | Jump to chunk start minus 3 s | Line-level refine pass, then line start minus 1.5 s |
@@ -41,7 +41,7 @@ jev-yt/
   src/
     page_bridge.js      MAIN world: player response, transcript API call, chapters
     content.js          isolated world: per-video state machine, coordinates modules
-    transcript.js       getTranscript(videoId): API method, then panel-scrape fallback
+    transcript.js       getTranscript(): player caption capture, then API, then panel-scrape fallback
     chunker.js          pure: captions -> chunks -> windows
     query.js            pure: parse query (next/back, highlight-only, filler stripping)
     request_builder.js  pure: build Jev request bodies with deterministic ids
@@ -60,7 +60,7 @@ jev-yt/
 
 ### Boundaries
 
-- **`page_bridge.js`** is the only code that touches YouTube page internals. It is injected with `"world": "MAIN"` and talks to `content.js` via `window.postMessage` with a per-load nonce so other page scripts cannot spoof messages.
+- **`page_bridge.js`** is the only code that touches YouTube page internals. It is injected with `"world": "MAIN"` and talks to `content.js` via `window.postMessage`; both sides check `event.source === window` and a request id. (No nonce: a MAIN-world script cannot hold a secret the page can't read, and the bridge carries only data the page already has.)
 - **`background.js`** is the only code that holds the API key or calls `api.typesafe.ai`.
 - **Pure modules** (`chunker`, `query`, `request_builder`, `scoring`, `config`) import no DOM or Chrome APIs.
 - **Permissions:** `storage`; host permissions `https://www.youtube.com/*` and `https://api.typesafe.ai/*` only. No remote code.
@@ -76,7 +76,7 @@ Resets on `yt-navigate-finish` when the video id changes. In-flight responses fo
 ### Prep (on watch-page load, silent)
 
 1. `getTranscript(videoId)` → `[{ start, end, text }]`.
-   - Primary: YouTube's internal transcript endpoint, called from the MAIN world using the page's own client context.
+   - Primary (Phase 0 finding): capture the player's own `/api/timedtext` JSON3 response. The bridge wraps XHR/fetch at `document_start`; if CC is off it briefly loads the captions module with the English track (captions hidden via CSS) and unloads it afterwards. It waits out pre-roll ads first. Calling `get_transcript` directly returned `400 FAILED_PRECONDITION` in testing, so it is now a fallback.
    - Fallback: open "Show transcript" programmatically, scrape segments, close the panel.
    - Language: prefer manual English, then auto-generated English. If none: state `unavailable`.
    - Cached per video id in memory and `chrome.storage.session`.
@@ -156,7 +156,7 @@ Dark, rounded, top-right of the player, ring-timer ✕. Only shown in response t
 
 ### Heatmap (`ui/heatmap.js`)
 
-An absolutely positioned layer over `.ytp-progress-bar`, one cell per chunk, colour and opacity from heat. It survives resize, theater and fullscreen (`ResizeObserver`). Clicking a hot cell seeks to its segment start. The landed segment pulses briefly after a jump. Esc clears it.
+An absolutely positioned layer over `.ytp-progress-bar`, one cell per chunk, colour and opacity from heat. Cells are positioned in percentages of the video duration, so they survive resize, theater and fullscreen without observers. Clicking a hot cell seeks to its segment start. The landed segment pulses briefly after a jump. Esc clears it.
 
 Because it lives inside the progress bar, the heatmap hides and shows with YouTube's controls. After any result (jump or highlight), the player controls are held visible for 5 s (`CONFIG.revealMs`) so the heatmap is seen; after that YouTube's normal auto-hide resumes, and the heatmap reappears on mouse move until Esc.
 
@@ -170,6 +170,8 @@ Because it lives inside the progress bar, the heatmap hides and shows with YouTu
 - Windows: the same with right Alt; suppress the browser menu focus on keyup.
 
 ### Options page
+
+The toolbar icon opens the options page (manifest `action`).
 
 API key field, **Test key** button (sends a one-question Noul; reports success or 401/422/429/529/network), and a note: the key stays in this browser and is sent only to TypeSafe. Setting: "Show toast on results" (default on).
 
