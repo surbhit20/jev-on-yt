@@ -68,3 +68,13 @@
 }
 .jev-input::placeholder { color: rgba(255, 255, 255, 0.4); }
 .jev-input:focus { border-color: rgba(255, 255, 255, 0.35); }
+.jev-toast-loading { width: min(380px, calc(100% - 28px)); padding: 20px 16px 20px 20px; }
+.jev-toast-loading .jev-toast-head { gap: 14px; }
+.jev-toast-loading .jev-toast-title { font-size: 16px; }
+.jev-toast-loading .jev-toast-body { margin-top: 10px; }
+.jev-spinner {
+  flex: none; width: 34px; height: 34px; box-sizing: border-box; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.14); border-top-color: #a3e635;
+  animation: jev-spin 0.9s linear infinite;
+}
+@keyframes jev-spin { to { transform: rotate(360deg); } }

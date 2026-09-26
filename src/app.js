@@ -32,6 +32,7 @@ export function start() {
   let last = null; // last decision
   let cursor = -1; // index into last.segments for next/back
   let queued = null; // text asked while preparing
+  let readyNotice = false; // the "Getting things ready" toast is up; update it when prep ends
   let searchSeq = 0; // guards against out-of-order search() calls for the same video
   let searching = false;
 
@@ -81,8 +82,9 @@ export function start() {
   function markUnavailable(why) {
     video.status = 'unavailable';
     log(why);
-    if (queued) {
+    if (queued || readyNotice) {
       queued = null;
+      readyNotice = false;
       toast.show({ title: 'No transcript for this video', dismissMs: CONFIG.toastMs.info });
     }
   }
@@ -96,6 +98,7 @@ export function start() {
       last = null;
       cursor = -1;
       queued = null;
+      readyNotice = false;
       voice.abort();
       media.reset();
       listening = null;
@@ -136,11 +139,22 @@ export function start() {
       `${result.lines.length} lines → ${chunks.length} chunks of ~${chunkSec}s → ${windows.length} windows; ` +
       `${chapters.length ? `${chapters.length} chapters` : 'no chapters, start pass running'}`);
 
+    if (readyNotice) {
+      readyNotice = false;
+      toast.show({ title: 'Ready', body: 'Hold Control to ask.', dismissMs: CONFIG.toastMs.info });
+    }
     if (queued) {
       const text = queued;
       queued = null;
       submit(text);
     }
+  }
+
+  // Control while preparing: no mic, just a clear wait state that updates itself when prep ends.
+  function showPreparing() {
+    readyNotice = true;
+    toast.show({ loading: true, title: 'Getting things ready', body: 'Reading the transcript. This takes a few seconds.' });
+    if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
   }
 
   function showError(err) {
@@ -323,6 +337,7 @@ export function start() {
     on: {
       holdStart() {
         if (!video.id) return;
+        if (video.status !== 'ready') return showPreparing();
         if (!voice.supported) {
           toast.show({
             title: "Voice isn't available here",
@@ -338,9 +353,7 @@ export function start() {
           return;
         }
         // Fall back to a no-op handle so holdEnd still stops the mic if the toast can't render.
-        listening = toast.show(video.status === 'preparing'
-          ? { title: 'Getting things ready…', body: "Keep talking, I'll run it when ready." }
-          : { title: 'Listening…', body: 'Release Control when done.' })
+        listening = toast.show({ title: 'Listening…', body: 'Release Control when done.' })
           ?? { setTitle() {}, setBody() {} };
       },
       async holdEnd() {
@@ -372,6 +385,7 @@ export function start() {
       },
       doubleTap() {
         if (!video.id) return;
+        if (video.status !== 'ready') return showPreparing();
         toast.show({
           title: 'Ask this video',
           input: { placeholder: 'e.g. caffeine and sleep', onSubmit: (t) => submit(t) },

@@ -47,16 +47,17 @@ export function createToast() {
     return btn;
   }
 
-  function show({ title = '', body = '', actions = [], dismissMs = 0, input = null }) {
+  function show({ title = '', body = '', actions = [], dismissMs = 0, input = null, loading = false }) {
     hide();
     const host = document.getElementById('movie_player');
     if (!host) return null;
 
-    root = el('div', 'jev-toast');
+    root = el('div', loading ? 'jev-toast jev-toast-loading' : 'jev-toast');
     root.setAttribute('role', 'status');
     for (const type of SWALLOW) root.addEventListener(type, (e) => e.stopPropagation());
 
     const head = el('div', 'jev-toast-head');
+    if (loading) head.append(el('div', 'jev-spinner'));
     const titleEl = el('span', 'jev-toast-title', title);
     head.append(titleEl, closeButton(dismissMs));
     root.append(head);
