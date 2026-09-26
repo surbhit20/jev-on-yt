@@ -37,4 +37,8 @@ export const CONFIG = {
 
   // UI
   revealMs: 5000,
+
+  // Transcript
+  adWaitMs: 1000,
+  adWaitTries: 180,
 };

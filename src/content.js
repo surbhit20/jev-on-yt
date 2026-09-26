@@ -43,7 +43,9 @@
     }
     const data = JSON.parse(info.dataJson);
     const chapters = parseChapters(data);
-    const result = await getTranscript({ bridge, videoId, data, durationSec: info.duration, log });
+    const result = await getTranscript({
+      bridge, videoId, data, durationSec: info.duration, log, isStale: () => gen !== video.gen,
+    });
     if (gen !== video.gen) return;
     if (!result) {
       video.status = 'unavailable';

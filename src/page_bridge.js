@@ -87,6 +87,7 @@
       const p = player();
       const vd = p?.getVideoData?.();
       if (!vd || vd.video_id !== videoId) return { status: 'wrong-video' };
+      if (p.classList.contains('ad-showing')) return { status: 'ad' };
 
       const btn = document.querySelector('.ytp-subtitles-button');
       const wasOn = btn?.getAttribute('aria-pressed') === 'true';

@@ -1,22 +1,37 @@
+import { CONFIG } from './config.js';
 import { findTranscriptParams, parseTranscriptResponse, parseJson3, linesFromPanel } from './transcript_parse.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PANEL = 'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]';
 
 // The only transcript entry point. Other sites can add their own implementation later.
-export async function getTranscript({ bridge, videoId, data, durationSec, log = () => {} }) {
+export async function getTranscript({ bridge, videoId, data, durationSec, log = () => {}, isStale = () => false }) {
   try {
-    const res = await bridge.call('captions', { videoId });
-    if (res.status === 200) {
-      const lines = parseJson3(JSON.parse(res.body));
-      if (lines.length) return { lines, method: 'captions' };
-      log('captions returned 0 lines');
-    } else {
+    let loggedAdWait = false;
+    for (let attempt = 0; attempt <= CONFIG.adWaitTries; attempt++) {
+      if (isStale()) return null;
+      const res = await bridge.call('captions', { videoId });
+      if (res.status === 200) {
+        const lines = parseJson3(JSON.parse(res.body));
+        if (lines.length) return { lines, method: 'captions' };
+        log('captions returned 0 lines');
+        break;
+      }
+      if (res.status === 'ad') {
+        if (!loggedAdWait) {
+          log('waiting for ad to finish');
+          loggedAdWait = true;
+        }
+        if (attempt < CONFIG.adWaitTries) await sleep(CONFIG.adWaitMs);
+        continue;
+      }
       log(`captions status ${res.status}`);
+      break;
     }
   } catch (e) {
     log(`captions failed: ${e.message}`);
   }
+  if (isStale()) return null;
 
   const params = findTranscriptParams(data);
   if (params) {
