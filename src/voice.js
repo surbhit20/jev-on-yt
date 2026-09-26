@@ -6,15 +6,20 @@ export function createVoice({ lang, onInterim }) {
   let finalText = '';
   let interimText = '';
   let error = null;
-  let onEnd = null;
+  let pending = [];
 
   function abort() {
     if (!rec) return;
     const r = rec;
     rec = null;
-    onEnd = null;
+    const toResolve = pending;
+    pending = [];
     r.onend = null;
     try { r.abort(); } catch {}
+    // Flush all pending resolvers with aborted error
+    for (const resolve of toResolve) {
+      resolve({ text: '', error: 'aborted' });
+    }
   }
 
   function start() {
@@ -42,18 +47,22 @@ export function createVoice({ lang, onInterim }) {
     rec.onerror = (e) => { error = e.error; };
     rec.onend = () => {
       rec = null;
-      const cb = onEnd;
-      onEnd = null;
-      cb?.();
+      const result = { text: `${finalText}${interimText}`.trim(), error };
+      const toResolve = pending;
+      pending = [];
+      for (const resolve of toResolve) {
+        resolve(result);
+      }
     };
     rec.start();
   }
 
   function stop() {
     return new Promise((resolve) => {
-      const done = () => resolve({ text: `${finalText}${interimText}`.trim(), error });
-      if (!rec) return done();
-      onEnd = done;
+      if (!rec) {
+        return resolve({ text: `${finalText}${interimText}`.trim(), error });
+      }
+      pending.push(resolve);
       rec.stop();
     });
   }
