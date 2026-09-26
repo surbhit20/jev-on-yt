@@ -32,7 +32,7 @@ export function start() {
   let last = null; // last decision
   let cursor = -1; // index into last.segments for next/back
   let queued = null; // text asked while preparing
-  let readyNotice = false; // the user waited on prep; say "Ready" when it ends
+  let readyNotice = false; // the user waited on prep; tell them if it ends with no transcript
   let preparingShown = false; // "Getting things ready" is on screen from a Control hold
   let searchSeq = 0; // guards against out-of-order search() calls for the same video
   let searching = false;
@@ -144,8 +144,8 @@ export function start() {
 
     if (readyNotice) {
       readyNotice = false;
+      if (preparingShown) toast.hide(); // prep finished while the wait toast was up
       preparingShown = false;
-      toast.show({ title: 'Ready', body: 'Hold Control to ask.', dismissMs: CONFIG.toastMs.info });
     }
     if (queued) {
       const text = queued;
