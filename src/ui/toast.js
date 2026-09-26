@@ -21,6 +21,19 @@ export function createToast() {
     root = null;
   }
 
+  // YouTube-style spinner: an arc that grows and shrinks while it rotates.
+  function spinner() {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'jev-spinner');
+    svg.setAttribute('viewBox', '22 22 44 44');
+    const arc = document.createElementNS(SVG_NS, 'circle');
+    arc.setAttribute('cx', '44');
+    arc.setAttribute('cy', '44');
+    arc.setAttribute('r', '20.2');
+    svg.append(arc);
+    return svg;
+  }
+
   function closeButton(dismissMs) {
     const btn = el('button', 'jev-close');
     btn.setAttribute('aria-label', 'Close');
@@ -57,7 +70,7 @@ export function createToast() {
     for (const type of SWALLOW) root.addEventListener(type, (e) => e.stopPropagation());
 
     const head = el('div', 'jev-toast-head');
-    if (loading) head.append(el('div', 'jev-spinner'));
+    if (loading) head.append(spinner());
     const titleEl = el('span', 'jev-toast-title', title);
     head.append(titleEl, closeButton(dismissMs));
     root.append(head);

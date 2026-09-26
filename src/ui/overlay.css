@@ -72,9 +72,15 @@
 .jev-toast-loading .jev-toast-head { gap: 14px; }
 .jev-toast-loading .jev-toast-title { font-size: 16px; }
 .jev-toast-loading .jev-toast-body { margin-top: 10px; }
-.jev-spinner {
-  flex: none; width: 34px; height: 34px; box-sizing: border-box; border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.14); border-top-color: #a3e635;
-  animation: jev-spin 0.9s linear infinite;
+.jev-spinner { flex: none; width: 34px; height: 34px; animation: jev-rotate 1.4s linear infinite; }
+.jev-spinner circle {
+  fill: none; stroke: #f1f1f1; stroke-width: 3.6;
+  stroke-dasharray: 1px, 200px; stroke-dashoffset: 0;
+  animation: jev-dash 1.4s ease-in-out infinite;
 }
-@keyframes jev-spin { to { transform: rotate(360deg); } }
+@keyframes jev-rotate { to { transform: rotate(360deg); } }
+@keyframes jev-dash {
+  0% { stroke-dasharray: 1px, 200px; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 100px, 200px; stroke-dashoffset: -15px; }
+  100% { stroke-dasharray: 100px, 200px; stroke-dashoffset: -125px; }
+}
