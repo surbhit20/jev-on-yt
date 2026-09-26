@@ -6,6 +6,7 @@ import { mapLimit } from './jev_client.js';
 async function fanOut(windows, limit, fn) {
   let fatal = null;
   const out = await mapLimit(windows, limit, async (win, i) => {
+    if (fatal) return { error: fatal };
     try {
       return await fn(win, i);
     } catch (e) {

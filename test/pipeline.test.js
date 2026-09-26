@@ -58,3 +58,13 @@ test('runRefine returns an absolute line index, null on failure', async () => {
   assert.equal(await runRefine({ lines, offset: 40, query: 'q', call: fakeCall(), model: 'm', maxLines: 255 }), 41);
   assert.equal(await runRefine({ lines, offset: 40, query: 'q', call: async () => { throw new Error('x'); }, model: 'm', maxLines: 255 }), null);
 });
+
+test('stops fan-out after fatal 401 error', async () => {
+  let callCount = 0;
+  const call = async () => {
+    callCount++;
+    throw new JevError(401, 'unauthorized');
+  };
+  await assert.rejects(runQuery({ windows, query: 'q', limit: 1, model: 'm', call }), (e) => e.status === 401);
+  assert.equal(callCount, 1);
+});
