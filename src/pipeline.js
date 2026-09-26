@@ -1,5 +1,6 @@
 import {
   buildQueryRequest, readQueryAnswers, buildStartRequest, readStartAnswers, buildRefineRequest, readRefineAnswer,
+  buildIntentRequest, readIntentAnswer,
 } from './request_builder.js';
 import { mapLimit } from './jev_client.js';
 
@@ -45,6 +46,16 @@ export async function runRefine({ lines, offset, query, call, model, maxLines })
   try {
     const { data } = await call(buildRefineRequest(lines, offset, query, model, maxLines), 'refine');
     return readRefineAnswer(data);
+  } catch {
+    return null;
+  }
+}
+
+// go / show intent for the user's words. Never throws: null means "use the word rule".
+export async function runIntent({ text, call, model }) {
+  try {
+    const { data } = await call(buildIntentRequest(text, model), 'intent');
+    return readIntentAnswer(data);
   } catch {
     return null;
   }

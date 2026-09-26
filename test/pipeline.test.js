@@ -85,3 +85,12 @@ test('stops fan-out after a 403 (key denied) too', async () => {
   await assert.rejects(runQuery({ windows, query: 'q', limit: 1, model: 'm', call }), (e) => e.status === 403);
   assert.equal(callCount, 1);
 });
+
+import { runIntent } from '../src/pipeline.js';
+
+test('runIntent returns the answer, and null instead of throwing', async () => {
+  const ok = async () => ({ data: { answers: { intent: { choice: 'go', confidence: 0.8 } } } });
+  assert.deepEqual(await runIntent({ text: 'caffeine', call: ok, model: 'm' }), { choice: 'go', confidence: 0.8 });
+  const bad = async () => { throw new JevError(529, 'busy'); };
+  assert.equal(await runIntent({ text: 'caffeine', call: bad, model: 'm' }), null);
+});

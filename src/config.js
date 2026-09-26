@@ -34,6 +34,7 @@ export const CONFIG = {
   chapterOther: 0.3,
   seekPadSec: 3,
   refinePadSec: 1.5,
+  intentMinConfidence: 0.6, // below this, the go/show word rule decides instead of Jev
 
   // UI
   revealMs: 5000,

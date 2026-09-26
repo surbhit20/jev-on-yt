@@ -24,3 +24,12 @@ for (const [input, kind, query, highlightOnly] of cases) {
     assert.deepEqual(parseQuery(input), { kind, query, highlightOnly });
   });
 }
+
+import { resolveHighlightOnly } from '../src/query.js';
+
+test('resolveHighlightOnly: confident Jev intent wins, otherwise the word rule', () => {
+  assert.equal(resolveHighlightOnly({ choice: 'show', confidence: 0.9 }, false, 0.6), true);
+  assert.equal(resolveHighlightOnly({ choice: 'go', confidence: 0.9 }, true, 0.6), false);
+  assert.equal(resolveHighlightOnly({ choice: 'show', confidence: 0.5 }, false, 0.6), false);
+  assert.equal(resolveHighlightOnly(null, true, 0.6), true);
+});

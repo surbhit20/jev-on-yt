@@ -102,3 +102,28 @@ export function readRefineAnswer(resp) {
   const choice = answersOf(resp).line?.choice;
   return typeof choice === 'string' && /^L\d+$/.test(choice) ? parseInt(choice.slice(1), 10) : null;
 }
+
+// Does the user want to be taken to the spot, or shown every place the topic comes up?
+export function buildIntentRequest(text, model) {
+  return {
+    model,
+    state: `User request: ${quote(text)}`,
+    questions: {
+      intent: {
+        type: 'choice',
+        instructions: 'While watching a video, the user said this request. What do they want the player to do?',
+        criteria: {
+          go: 'Take them to the one spot where the topic is discussed (jump there now)',
+          show: 'Show them all the places where the topic comes up, without jumping',
+        },
+      },
+    },
+  };
+}
+
+export function readIntentAnswer(resp) {
+  const a = answersOf(resp).intent;
+  if (a?.choice !== 'go' && a?.choice !== 'show') return null;
+  const confidence = num(a.confidence) ?? num(a.probabilities?.[a.choice]) ?? 0;
+  return { choice: a.choice, confidence };
+}

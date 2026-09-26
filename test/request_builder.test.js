@@ -68,3 +68,21 @@ test('readRefineAnswer', () => {
   assert.equal(readRefineAnswer({ answers: { line: { choice: 'L0412' } } }), 412);
   assert.equal(readRefineAnswer({}), null);
 });
+
+import { buildIntentRequest, readIntentAnswer } from '../src/request_builder.js';
+
+test('buildIntentRequest: one Choice over go/show, the user words as state', () => {
+  const b = buildIntentRequest('where does he mention "naps"', 'm');
+  assert.equal(b.model, 'm');
+  assert.equal(b.state, 'User request: "where does he mention \\"naps\\""');
+  assert.deepEqual(Object.keys(b.questions), ['intent']);
+  assert.equal(b.questions.intent.type, 'choice');
+  assert.deepEqual(Object.keys(b.questions.intent.criteria), ['go', 'show']);
+});
+
+test('readIntentAnswer: choice with confidence, falling back to its probability', () => {
+  assert.deepEqual(readIntentAnswer({ answers: { intent: { choice: 'show', confidence: 0.9 } } }), { choice: 'show', confidence: 0.9 });
+  assert.deepEqual(readIntentAnswer({ answers: { intent: { choice: 'go', probabilities: { go: 0.7, show: 0.3 } } } }), { choice: 'go', confidence: 0.7 });
+  assert.equal(readIntentAnswer({ answers: { intent: { choice: 'maybe' } } }), null);
+  assert.equal(readIntentAnswer({}), null);
+});

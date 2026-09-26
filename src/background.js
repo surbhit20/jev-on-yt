@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { callJev, JevError } from './jev_client.js';
-import { runQuery, runStart, runRefine } from './pipeline.js';
+import { runQuery, runStart, runRefine, runIntent } from './pipeline.js';
 import { buildTestRequest } from './request_builder.js';
 
 // Memory cache backed by storage.session (the worker can be killed when idle).
@@ -74,6 +74,15 @@ const handlers = {
     if (CONFIG.dev) console.log(`[jev-yt] query "${query}": ${windows.length} windows in ${Date.now() - t0} ms, failed=${JSON.stringify(res.failed)}`);
     if (!res.failed.length) await cacheSet(key, res);
     return { ...res, cached: false };
+  },
+
+  async intent({ text }) {
+    const key = `i:${String(text).trim().toLowerCase()}`;
+    const hit = await cacheGet(key);
+    if (hit) return hit;
+    const result = await runIntent({ text, call: makeCall(await getKey()), model: CONFIG.model });
+    if (result) await cacheSet(key, result);
+    return result;
   },
 
   async refine({ lines, offset, query }) {

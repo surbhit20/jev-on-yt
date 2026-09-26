@@ -4,7 +4,7 @@ import { getTranscript } from './transcript.js';
 import { parseChapters } from './transcript_parse.js';
 import { formatTime } from './time.js';
 import * as chunker from './chunker.js';
-import { parseQuery } from './query.js';
+import { parseQuery, resolveHighlightOnly } from './query.js';
 import * as scoring from './scoring.js';
 import { segmentIndexForChunk, segmentAtX } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
@@ -245,7 +245,7 @@ export function start() {
     return time;
   }
 
-  async function search(parsed) {
+  async function search(parsed, text) {
     const seq = ++searchSeq;
     searching = true;
     try {
@@ -257,8 +257,12 @@ export function start() {
 
       let d;
       try {
+        // Jev decides go vs show from the user's own words, in parallel with the scoring.
+        const intentP = send({ type: 'intent', text }).catch(() => null);
         const res = await send({ type: 'query', videoId, windows, query: parsed.query });
+        const intent = await intentP;
         if (stale()) return;
+        const highlightOnly = resolveHighlightOnly(intent, parsed.highlightOnly, CONFIG.intentMinConfidence);
         let st = await video.startPromise;
         if (!st.ok && !stale()) {
           video.startPromise = startPass(videoId, chunks, windows, video.chapters);
@@ -271,10 +275,11 @@ export function start() {
           bests: res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null)),
           exists: res.perWindow.map((w) => w?.exists ?? null),
           unknown: rel.map((v) => v == null),
-          highlightOnly: parsed.highlightOnly,
+          highlightOnly,
           config: CONFIG,
         });
-        log(`"${parsed.query}": ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
+        log(`"${parsed.query}": intent=${intent ? `${intent.choice} ${intent.confidence.toFixed(2)}` : 'n/a'} ` +
+          `→ ${highlightOnly ? 'show' : 'go'}; ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
           `failedWindows=${JSON.stringify(res.failed)}, cached=${res.cached}`);
       } catch (err) {
         if (stale()) return;
@@ -340,7 +345,7 @@ export function start() {
       if (video.status === 'unavailable') prepare(true).catch((e) => log('prepare failed:', e.message));
       return;
     }
-    return search(parsed);
+    return search(parsed, text);
   }
 
   const keys = createKeyWatcher({

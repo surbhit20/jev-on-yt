@@ -39,3 +39,9 @@ export function parseQuery(raw) {
   if (!q) return { kind: 'empty', ...none };
   return { kind: 'search', query: q, highlightOnly };
 }
+
+// Jev's go/show intent decides when it is confident; otherwise fall back to the word rule.
+export function resolveHighlightOnly(intent, fallbackHighlightOnly, minConfidence) {
+  if (intent && intent.confidence >= minConfidence) return intent.choice === 'show';
+  return fallbackHighlightOnly;
+}
