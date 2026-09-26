@@ -26,25 +26,25 @@
   position: absolute; top: 14px; right: 14px; z-index: 1000;
   width: min(340px, calc(100% - 28px)); box-sizing: border-box;
   padding: 14px 14px 14px 18px; border-radius: 14px;
-  background: rgba(22, 22, 24, 0.72);
+  background: rgba(0, 0, 0, 0.94);
   -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
   font: 400 13px/1.45 var(--jev-font);
   font-feature-settings: "tnum" 1; -webkit-font-smoothing: antialiased;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 .jev-toast-head { display: flex; align-items: center; gap: 8px; }
 .jev-toast-title { flex: 1; font-size: 14px; font-weight: 590; letter-spacing: -0.01em; }
-.jev-toast-body { margin-top: 3px; color: rgba(255, 255, 255, 0.6); }
+.jev-toast-body { margin-top: 3px; color: #a3a3a3; }
 .jev-toast-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
 .jev-btn {
   border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
   font: 500 12.5px/1.2 var(--jev-font); letter-spacing: -0.005em;
-  background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.92);
+  background: #1c1c1c; color: #f5f5f5;
 }
-.jev-btn:hover { background: rgba(255, 255, 255, 0.16); }
-.jev-btn.jev-primary { background: rgba(255, 255, 255, 0.92); color: #111; }
+.jev-btn:hover { background: #262626; }
+.jev-btn.jev-primary { background: #efece4; color: #111; }
 .jev-btn.jev-primary:hover { background: #fff; }
 .jev-close {
   position: relative; flex: none; width: 24px; height: 24px; padding: 0; border: 0;
