@@ -158,6 +158,8 @@ Dark, rounded, top-right of the player, ring-timer ✕. Only shown in response t
 
 An absolutely positioned layer over `.ytp-progress-bar`, one cell per chunk, colour and opacity from heat. It survives resize, theater and fullscreen (`ResizeObserver`). Clicking a hot cell seeks to its segment start. The landed segment pulses briefly after a jump. Esc clears it.
 
+Because it lives inside the progress bar, the heatmap hides and shows with YouTube's controls. After any result (jump or highlight), the player controls are held visible for 5 s (`CONFIG.revealMs`) so the heatmap is seen; after that YouTube's normal auto-hide resumes, and the heatmap reappears on mouse move until Esc.
+
 ### Keys (content script, YouTube tab focused)
 
 - **Hold Right Option** (`event.code === "AltRight"`) alone for ≥250 ms → start listening; release → submit.
@@ -204,7 +206,7 @@ Each phase ends with tests passing and a short report.
 0. **Transcript spike.** `page_bridge` + `transcript.js`; log the first and last 5 lines. Test: a 2 h podcast, an auto-captions-only video, a no-captions video, and SPA navigation between two videos. Confirm the primary/fallback order.
 1. **Chunker, request builder, Jev client, options page.** Unit tests. Test key works. **Measure one real window request: latency and `usage.input_tokens` for ~32 questions over ~3k tokens.**
 2. **End to end in the console.** Prep + query fan-out + `scoring.js` + refine pass; log scores and the chosen time. Done when a clearly discussed topic in a long podcast gives a sensible timestamp.
-3. **Heatmap + toast.** Normal, theater and fullscreen; click to seek; shimmer.
+3. **Heatmap + toast.** Normal, theater, fullscreen and the new fullscreen layout (actions above the bar); click to seek; shimmer; controls held visible for 5 s after a result.
 4. **Automatic decision UX.** Jump / highlight / absent, Undo, Show all, next/back, highlight-only phrasing, queued query during prep.
 5. **Voice.** Right Option hold-to-talk, double-tap to type, voice next/back.
 6. **Polish and eval.** Error toasts, caching, README with privacy note, eval run and threshold tuning.
