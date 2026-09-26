@@ -27,9 +27,11 @@ for (const [input, kind, query, highlightOnly] of cases) {
 
 import { resolveHighlightOnly } from '../src/query.js';
 
-test('resolveHighlightOnly: confident Jev intent wins, otherwise the word rule', () => {
+test('resolveHighlightOnly: explicit show words always win; otherwise a confident Jev decides', () => {
+  assert.equal(resolveHighlightOnly({ choice: 'go', confidence: 0.95 }, true, 0.6), true); // "where does he…"
   assert.equal(resolveHighlightOnly({ choice: 'show', confidence: 0.9 }, false, 0.6), true);
-  assert.equal(resolveHighlightOnly({ choice: 'go', confidence: 0.9 }, true, 0.6), false);
+  assert.equal(resolveHighlightOnly({ choice: 'go', confidence: 0.9 }, false, 0.6), false);
   assert.equal(resolveHighlightOnly({ choice: 'show', confidence: 0.5 }, false, 0.6), false);
   assert.equal(resolveHighlightOnly(null, true, 0.6), true);
+  assert.equal(resolveHighlightOnly(null, false, 0.6), false);
 });

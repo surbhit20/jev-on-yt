@@ -111,10 +111,12 @@ export function buildIntentRequest(text, model) {
     questions: {
       intent: {
         type: 'choice',
-        instructions: 'While watching a video, the user said this request. What do they want the player to do?',
+        instructions: 'While watching a video, the user said this request. What do they want the player to do? '
+          + 'Questions about where, when or how often something comes up mean show. '
+          + 'Commands to skip, jump, go, take me or play mean go.',
         criteria: {
-          go: 'Take them to the one spot where the topic is discussed (jump there now)',
-          show: 'Show them all the places where the topic comes up, without jumping',
+          go: 'A command to move the video now: skip, jump, go or take me to the part about the topic',
+          show: 'A question about where, when or how often the topic comes up; mark the places without moving the video',
         },
       },
     },

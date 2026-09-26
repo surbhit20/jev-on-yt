@@ -40,8 +40,10 @@ export function parseQuery(raw) {
   return { kind: 'search', query: q, highlightOnly };
 }
 
-// Jev's go/show intent decides when it is confident; otherwise fall back to the word rule.
-export function resolveHighlightOnly(intent, fallbackHighlightOnly, minConfidence) {
+// Explicit "show" words (where / show / find / highlight) always mean show. Otherwise Jev's
+// go/show intent decides when it is confident, and anything else means go.
+export function resolveHighlightOnly(intent, explicitShow, minConfidence) {
+  if (explicitShow) return true;
   if (intent && intent.confidence >= minConfidence) return intent.choice === 'show';
-  return fallbackHighlightOnly;
+  return false;
 }
