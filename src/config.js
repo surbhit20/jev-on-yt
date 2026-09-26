@@ -41,12 +41,12 @@ export const CONFIG = {
   heatFloor: 0.2, // click targets on the progress bar
   wave: {
     heightPx: 48,
-    minOpacity: 0.1, // fill at the lowest visible hill
-    maxOpacity: 0.3, // fill at the video's peak
-    edgeOpacity: 0.75, // top line, so the shape reads over any frame
+    color: '#a3e635', // lime
+    fillOpacity: 0.58,
+    edgeOpacity: 1,
     smoothRadius: 3, // chunks
     floor: 0.04, // below this smoothed heat the wave is flat
-    colors: [[0, [250, 199, 117]], [0.45, [239, 159, 39]], [0.7, [216, 90, 48]], [1, [212, 83, 126]]],
+    peakCut: 0.35, // peaks only: below 35% of the video's peak stays flat
   },
   pulseMs: 1500,
   toastMs: { jump: 4000, highlight: 6000, absent: 4000, info: 3000 },

@@ -28,9 +28,8 @@ test('segmentIndexForChunk', () => {
   assert.equal(segmentIndexForChunk(segs, 3), -1);
 });
 
-import { smoothGauss, waveSamples, wavePath, waveColor } from '../src/heat_layout.js';
+import { smoothGauss, waveSamples, wavePath } from '../src/heat_layout.js';
 
-const COLORS = [[0, [250, 199, 117]], [0.45, [239, 159, 39]], [0.7, [216, 90, 48]], [1, [212, 83, 126]]];
 
 test('smoothGauss: radius 0 is identity (nulls as 0); a spike spreads symmetrically', () => {
   assert.deepEqual(smoothGauss([0.2, null, 0.5], 0), [0.2, 0, 0.5]);
@@ -44,6 +43,12 @@ test('waveSamples: x at chunk midpoints in %, t normalised to the peak, 0 below 
   const s = waveSamples(chunks, [0.01, 0.4, 0.8, 0.01], 80, { smoothRadius: 0, floor: 0.04 });
   assert.deepEqual(s.map((p) => p.x), [12.5, 37.5, 62.5, 87.5]);
   assert.deepEqual(s.map((p) => p.t), [0, 0.5, 1, 0]);
+});
+
+test('waveSamples: peakCut flattens hills below the cut and rescales the rest from the baseline', () => {
+  const chunks = [{ start: 0, end: 10 }, { start: 10, end: 20 }, { start: 20, end: 30 }];
+  const s = waveSamples(chunks, [0.2, 0.6, 1], 30, { smoothRadius: 0, floor: 0.04, peakCut: 0.35 });
+  assert.deepEqual(s.map((p) => Number(p.t.toFixed(4))), [0, 0.3846, 1]);
 });
 
 test('waveSamples: nothing to draw when all heat is below the floor or there is no duration', () => {
@@ -62,8 +67,3 @@ test('wavePath: closed area on the baseline, peak touches the top, nothing below
   assert.ok(ys.every((y) => y >= 0 && y <= 48));
 });
 
-test('waveColor: interpolates amber to magenta', () => {
-  assert.deepEqual(waveColor(0, COLORS), [250, 199, 117]);
-  assert.deepEqual(waveColor(1, COLORS), [212, 83, 126]);
-  assert.deepEqual(waveColor(0.45, COLORS), [239, 159, 39]);
-});

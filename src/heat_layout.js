@@ -38,15 +38,16 @@ export function smoothGauss(values, radius) {
 }
 
 // Wave samples for the relevance chart: x at each chunk's midpoint in % of the duration,
-// t = height relative to the video's own peak (0 where smoothed heat is below `floor`).
-export function waveSamples(chunks, heat, durationSec, { smoothRadius, floor }) {
+// t = height relative to the video's own peak. Heat below `floor`, or below `peakCut` of the
+// peak, is flat; the part above `peakCut` is rescaled so peaks rise from the baseline.
+export function waveSamples(chunks, heat, durationSec, { smoothRadius, floor, peakCut = 0 }) {
   if (!(durationSec > 0) || !chunks.length) return [];
   const smoothed = smoothGauss(heat, smoothRadius);
   const peak = Math.max(...smoothed);
   if (!(peak >= floor)) return [];
   return chunks.map((c, i) => ({
     x: clampPct(((c.start + c.end) / 2 / durationSec) * 100),
-    t: smoothed[i] < floor ? 0 : smoothed[i] / peak,
+    t: smoothed[i] < floor ? 0 : Math.max(0, (smoothed[i] / peak - peakCut) / (1 - peakCut)),
   }));
 }
 
@@ -69,17 +70,4 @@ export function wavePath(samples, height) {
   }
   const area = `M0 ${height} L${top.slice(1)} L100 ${height} Z`;
   return { top, area };
-}
-
-// Colour ramp lookup: `colors` is [[t, [r, g, b]], ...] with t ascending from 0 to 1.
-export function waveColor(t, colors) {
-  for (let k = 1; k < colors.length; k++) {
-    const [b, cb] = colors[k];
-    if (t <= b) {
-      const [a, ca] = colors[k - 1];
-      const f = b === a ? 0 : (t - a) / (b - a);
-      return ca.map((v, j) => Math.round(v + (cb[j] - v) * f));
-    }
-  }
-  return colors[colors.length - 1][1];
 }
