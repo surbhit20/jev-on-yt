@@ -34,3 +34,50 @@ $('test').addEventListener('click', async () => {
     setStatus(`Error: ${e?.message ?? 'unknown'}`);
   }
 });
+
+// Optional OpenAI key for voice. Saving asks Chrome for access to api.openai.com (only then).
+const OPENAI_ORIGIN = 'https://api.openai.com/*';
+const setOStatus = (t) => { $('ostatus').textContent = t; };
+const OPENAI_MESSAGES = {
+  'openai:401': 'Key rejected (401). Check it and try again.',
+  'openai:429': 'Rate limited or out of credit (429).',
+  'openai:network': "Can't reach OpenAI. Check your connection.",
+  'openai:nokey': 'Paste a key first.',
+};
+
+const { openaiKey } = await chrome.storage.local.get('openaiKey');
+if (openaiKey) $('okey').value = openaiKey;
+
+$('osave').addEventListener('click', async () => {
+  const value = $('okey').value.trim();
+  if (!value) {
+    await chrome.storage.local.remove('openaiKey');
+    await chrome.permissions.remove({ origins: [OPENAI_ORIGIN] }).catch(() => {});
+    setOStatus("Key removed. Voice uses Chrome's built-in recognition.");
+    return;
+  }
+  // Must run straight from the click, before any other await, or Chrome refuses the prompt.
+  const granted = await chrome.permissions.request({ origins: [OPENAI_ORIGIN] });
+  if (!granted) {
+    setOStatus('Chrome access to api.openai.com is needed to use this key. Not saved.');
+    return;
+  }
+  await chrome.storage.local.set({ openaiKey: value });
+  setOStatus('Saved. Voice now uses OpenAI.');
+});
+
+$('otest').addEventListener('click', async () => {
+  // Testing also needs access to api.openai.com; ask from the click, like Save.
+  const granted = await chrome.permissions.request({ origins: [OPENAI_ORIGIN] });
+  if (!granted) {
+    setOStatus('Chrome access to api.openai.com is needed to test this key.');
+    return;
+  }
+  setOStatus('Testing…');
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'testOpenAI', apiKey: $('okey').value.trim() || undefined });
+    setOStatus(res?.ok ? 'Key works.' : OPENAI_MESSAGES[res?.error?.status] ?? `Error: ${res?.error?.message ?? 'unknown'}`);
+  } catch (e) {
+    setOStatus(`Error: ${e?.message ?? 'unknown'}`);
+  }
+});

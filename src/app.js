@@ -8,7 +8,8 @@ import { parseQuery, resolveHighlightOnly } from './query.js';
 import * as scoring from './scoring.js';
 import { segmentIndexForChunk, segmentAtX } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
-import { createVoice } from './voice.js';
+import { createVoice, createRecorderVoice } from './voice.js';
+import { toBase64 } from './openai_transcribe.js';
 import { createMediaGuard } from './media_guard.js';
 import { createToast } from './ui/toast.js';
 import { createHeatmap } from './ui/heatmap.js';
@@ -23,10 +24,22 @@ export function start() {
   const toast = createToast();
   const heatmap = createHeatmap({ onCellClick, onWaveClick, revealTickMs: CONFIG.revealTickMs });
   let listening = null; // toast handle while the mic is open
-  const voice = createVoice({
-    lang: CONFIG.voiceLang,
-    onInterim: (text) => listening?.setBody(text || 'Listening…'),
-  });
+  // Chrome's built-in recognition by default; OpenAI transcription when the user saved an OpenAI key.
+  const voices = {
+    chrome: createVoice({
+      lang: CONFIG.voiceLang,
+      onInterim: (text) => listening?.setBody(text || 'Listening…'),
+    }),
+    openai: createRecorderVoice({ toBase64 }),
+  };
+  let voiceEngine = 'chrome';
+  let voice = voices.chrome; // the engine of the current hold
+  let holdSeq = 0; // a newer hold makes an older hold's late result stale
+  const refreshVoiceEngine = () => {
+    chrome.runtime.sendMessage({ type: 'voiceMode' })
+      .then((res) => { if (res?.ok) voiceEngine = res.result.engine; })
+      .catch(() => {});
+  };
 
   const video = { id: null, gen: 0, status: 'idle' };
   let last = null; // last decision
@@ -102,7 +115,8 @@ export function start() {
       queued = null;
       readyNotice = false;
       preparingShown = false;
-      voice.abort();
+      voices.chrome.abort();
+      voices.openai.abort();
       media.reset();
       listening = null;
     }
@@ -357,6 +371,8 @@ export function start() {
       holdStart() {
         if (!video.id) return;
         if (video.status !== 'ready') return showPreparing();
+        voice = voices[voiceEngine] ?? voices.chrome;
+        holdSeq++;
         if (!voice.supported) {
           toast.show({
             title: "Voice isn't available here",
@@ -382,8 +398,11 @@ export function start() {
         }
         if (!listening) return;
         listening = null;
-        const { text, error } = await voice.stop();
-        if (error === 'aborted') return; // a newer hold owns the mic (and the paused video)
+        const seq = holdSeq;
+        const engine = voice === voices.openai ? 'openai' : 'chrome';
+        const { text, audio, error } = await voice.stop();
+        refreshVoiceEngine();
+        if (error === 'aborted' || seq !== holdSeq) return; // a newer hold owns the mic (and the paused video)
         media.release();
         if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') {
           toast.show({ title: 'Mic blocked', body: 'Double-tap Control to type instead.' });
@@ -396,10 +415,20 @@ export function start() {
           });
           return;
         }
-        submit(text);
+        if (engine === 'chrome') return submit(text);
+        if (!audio || audio.bytes < CONFIG.openai.minAudioBytes) return submit('');
+        toast.show({ title: 'Transcribing…' });
+        try {
+          const res = await send({ type: 'transcribe', audio });
+          if (seq !== holdSeq) return;
+          submit(res.text);
+        } catch (err) {
+          if (seq === holdSeq) showError(err);
+        }
       },
       holdCancel() {
         voice.abort();
+        refreshVoiceEngine();
         media.release();
         if (listening) {
           listening = null;
@@ -446,6 +475,8 @@ export function start() {
   window.addEventListener('blur', () => keys.blur());
   document.addEventListener('yt-navigate-finish', () => prepare().catch((e) => log('prepare failed:', e.message)));
 
+  refreshVoiceEngine();
+  window.addEventListener('focus', refreshVoiceEngine);
   globalThis.jev = { ask: submit, video, get last() { return last; } };
   prepare().catch((e) => log('prepare failed:', e.message));
 }

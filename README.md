@@ -11,6 +11,7 @@ Scoring uses [TypeSafe](https://typesafe.ai)'s Jev model with your own API key.
 1. Clone this repo.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the repo folder.
 3. Click the Jev YT toolbar icon, paste your TypeSafe API key, and click **Save**, then **Test key**.
+4. Optional: add an OpenAI API key under **Voice** for more accurate voice recognition.
 
 ## Use
 
@@ -32,7 +33,7 @@ Questions that start with "show", "where", "find" or "highlight" only highlight,
 
 - Your API key is stored in this browser (`chrome.storage.local`) and sent only to `api.typesafe.ai`.
 - The transcript of the video you're watching and your question are sent to TypeSafe to score.
-- While Control is held, Chrome's built-in speech recognition sends your voice to Google.
+- Voice: by default, while Control is held, Chrome's built-in speech recognition sends your voice to Google. If you add an optional OpenAI key in settings, the recording is sent to OpenAI (gpt-4o-mini-transcribe) instead, and only then does the extension get access to `api.openai.com`.
 - Voice uses Chrome's speech recognition on youtube.com, so Chrome asks to allow the microphone for youtube.com; that permission also lets YouTube itself use the mic.
 - Nothing else leaves the browser. No analytics.
 

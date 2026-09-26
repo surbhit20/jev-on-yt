@@ -55,6 +55,14 @@ export const CONFIG = {
   holdMs: 250,
   doubleTapMs: 350,
   voiceLang: 'en-US',
+  openai: { // optional: used for voice when the user saves an OpenAI key
+    endpoint: 'https://api.openai.com/v1/audio/transcriptions',
+    modelsEndpoint: 'https://api.openai.com/v1/models',
+    origin: 'https://api.openai.com/*',
+    model: 'gpt-4o-mini-transcribe',
+    language: 'en',
+    minAudioBytes: 1500, // shorter recordings are treated as "didn't catch that"
+  },
   whileListening: 'pause', // keep the video's audio out of the mic: 'pause' | 'mute' | 'none'
 
   // Transcript
