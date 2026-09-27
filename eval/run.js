@@ -1,4 +1,5 @@
-// JEV_API_KEY=… [OPENAI_API_KEY=…] [JEV_ENDPOINT=…] npm run eval -- [--only chapters|labelled|voice] [--video <id>] [--case <text>] [--fresh] [--offline] [--compare <results.json>]
+// JEV_API_KEY=… [OPENAI_API_KEY=…] [JEV_ENDPOINT=…] [JUDGE_MODEL=…] npm run eval -- [--judge]
+//   [--only chapters|labelled|queries|voice] [--video <id>] [--case <text>] [--fresh] [--offline] [--compare <results.json>]
 // Runs the extension's search against the real Jev API on exported transcripts and scores it.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -10,28 +11,31 @@ import { runSearch } from '../src/pipeline.js';
 import { parseQuery } from '../src/query.js';
 import { callTranscribe } from '../src/openai_transcribe.js';
 import { formatTime } from '../src/time.js';
-import { loadVideos, prepareVideo, chapterCases, loadLabelled } from './cases.js';
+import { loadVideos, prepareVideo, chapterCases, loadLabelled, loadQueries } from './cases.js';
 import { scoreCase, aggregate, jumpOk } from './metrics.js';
 import { wer, keyTermsKept } from './wer.js';
+import { makeJudge, judgeCase, judgeAggregate, agreement, DEFAULT_JUDGE_MODEL, JUDGE_ENDPOINT } from './judge.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
 const DIR = {
   videos: join(ROOT, 'data/videos'),
   voice: join(ROOT, 'data/voice'),
   labelled: join(ROOT, 'cases/labelled.json'),
+  queries: join(ROOT, 'cases/queries.json'),
   cache: join(ROOT, 'cache'),
   results: join(ROOT, 'results'),
 };
 
 function parseArgs(argv) {
-  const a = { only: null, video: null, case: null, fresh: false, offline: false, compare: null };
+  const a = { only: null, video: null, case: null, fresh: false, offline: false, judge: false, compare: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, '');
-    if (k === 'fresh' || k === 'offline') a[k] = true;
+    if (k === 'fresh' || k === 'offline' || k === 'judge') a[k] = true;
     else if (k in a) a[k] = argv[++i];
     else throw new Error(`unknown option ${argv[i]}`);
   }
-  if (a.only && !['chapters', 'labelled', 'voice'].includes(a.only)) throw new Error('--only takes chapters, labelled or voice');
+  if (a.only && !['chapters', 'labelled', 'queries', 'voice'].includes(a.only)) throw new Error('--only takes chapters, labelled, queries or voice');
+  if (a.only === 'queries') a.judge = true; // unlabelled queries have nothing to score without the judge
   return a;
 }
 
@@ -103,6 +107,10 @@ function printCases(rows) {
       continue;
     }
     const s = r.score;
+    if (!s.spots && s.absentOk == null) {
+      console.log(`${pad(r.id, 16)} ${pad(r.query, 34)} ${pad(s.kind, 9)} ${s.peaks.length} peak(s)${s.jumpTime == null ? '' : `, top at ${formatTime(s.jumpTime)}`}`);
+      continue;
+    }
     if (s.absentOk != null) {
       console.log(`${pad(r.id, 16)} ${pad(r.query, 34)} ${pad(s.kind, 9)} ${pad('', 8)} ${pad('', 8)} ${pad(s.absentOk ? 'absent ✓' : 'absent ✗', 6)} ${pad(s.falsePeaks, 5)}`);
       continue;
@@ -129,14 +137,57 @@ function printAggregate(name, a, prev) {
   if (a.absentPass != null) console.log(`  absent pass  ${pct(a.absentPass)}${d('absentPass', null, 100, 0)}`);
 }
 
-async function runSearchCases(cases, videos, call) {
+function printJudge(rows) {
+  const judged = rows.filter((r) => r.judge || r.judgeError);
+  if (!judged.length) return;
+  console.log(`\njudge\n${pad('case', 16)} ${pad('query', 34)} ${pad('on-topic', 9)} ${pad('landing', 16)} ${pad('recall', 6)} missed`);
+  for (const r of judged) {
+    if (r.judgeError) {
+      console.log(`${pad(r.id, 16)} ${pad(r.query, 34)} ERROR ${r.judgeError}`);
+      continue;
+    }
+    const j = r.judge;
+    const onTopic = j.peaks.length ? `${j.peaks.length - j.falsePeaks}/${j.peaks.length}` : '–';
+    const landing = j.landing ? `${j.landing.verdict}${j.landingErr == null ? '' : ` ${j.landingErr >= 0 ? '+' : ''}${Math.round(j.landingErr)}s`}` : '–';
+    const missed = j.missed.map((s) => formatTime(s.start)).join(' ');
+    console.log(`${pad(r.id, 16)} ${pad(r.query, 34)} ${pad(onTopic, 9)} ${pad(landing, 16)} ${pad(pct(j.recall), 6)} ${missed}`);
+  }
+}
+
+function printJudgeAggregate(name, a, prev) {
+  if (!a?.cases) return;
+  const d = (k, scale = 1, digits = 0) => (a[k] != null && prev?.[k] != null
+    ? ` (${a[k] - prev[k] >= 0 ? '+' : ''}${((a[k] - prev[k]) * scale).toFixed(digits)})` : '');
+  console.log(`\njudge · ${name}: ${a.cases} cases`);
+  console.log(`  precision    ${pct(a.precision)}${d('precision', 100)}   false peaks ${f(a.falsePeaks, 2)} per case${d('falsePeaks', 1, 2)}`);
+  console.log(`  jump acc     ${pct(a.jumpAcc)}${d('jumpAcc', 100)}   landing off by ${f(a.landingErr, 1)}s${d('landingErr', 1, 1)}`);
+  console.log(`  recall       ${pct(a.recall)}${d('recall', 100)}   missed ${f(a.missed, 2)} spot(s) per case${d('missed', 1, 2)}`);
+}
+
+function printAgreement(a) {
+  if (!a?.cases) return;
+  console.log(`\njudge vs your labels (${a.cases} cases): peaks ${pct(a.peaks)} of ${a.peakCount}, jump ${pct(a.jump)}, ` +
+    `absent ${pct(a.absent)}, spots found ${pct(a.spotRecall)}, spots correct ${pct(a.spotPrecision)}`);
+  const low = [a.peaks, a.jump, a.absent, a.spotRecall, a.spotPrecision].some((v) => v != null && v < 0.8);
+  if (low) console.log('  Agreement under 80%: read the judged numbers with care, or tighten the judge prompts.');
+}
+
+async function runSearchCases(cases, videos, call, judge) {
   const rows = [];
   for (const c of cases) {
     if (process.stdout.isTTY) process.stdout.write(`\r${rows.length + 1}/${cases.length} ${c.id}`.padEnd(60));
     try {
       const v = videos[c.video];
       const r = await search(v, c.query, { hideChapters: c.hideChapters, call });
-      rows.push({ id: c.id, source: c.source, query: c.query, score: scoreCase(c, { ...r, chunks: v.chunks }) });
+      const row = { id: c.id, source: c.source, query: c.query, score: scoreCase(c, { ...r, chunks: v.chunks }) };
+      if (judge) {
+        try {
+          row.judge = await judgeCase({ judge, query: r.query, video: v, peaks: row.score.peaks, jumpTime: r.jumpTime });
+        } catch (e) {
+          row.judgeError = e.message;
+        }
+      }
+      rows.push(row);
     } catch (e) {
       rows.push({ id: c.id, source: c.source, query: c.query, error: e.message });
     }
@@ -246,23 +297,47 @@ async function main() {
   }
   if (!args.offline && !process.env.JEV_API_KEY) console.warn('JEV_API_KEY is not set: only cached responses will work.');
 
-  let cases = [...Object.values(videos).flatMap(chapterCases), ...loadLabelled(DIR.labelled, videos)];
+  let cases = [
+    ...Object.values(videos).flatMap(chapterCases), ...loadLabelled(DIR.labelled, videos), ...loadQueries(DIR.queries, videos),
+  ];
   if (args.video) cases = cases.filter((c) => c.video === args.video);
   if (args.case) cases = cases.filter((c) => c.id.includes(args.case) || c.query.toLowerCase().includes(args.case.toLowerCase()));
 
   const cache = makeCache(args);
   const call = (misses) => makeJevCall(cache, misses);
-  const searchCases = args.only === 'voice' ? [] : cases.filter((c) => !args.only || c.source === args.only);
-  const rows = await runSearchCases(searchCases, videos, call);
+  const judgeModel = process.env.JUDGE_MODEL || DEFAULT_JUDGE_MODEL;
+  const judge = args.judge
+    ? makeJudge({ apiKey: process.env.OPENAI_API_KEY, model: judgeModel, endpoint: process.env.JUDGE_ENDPOINT || JUDGE_ENDPOINT, cached: cache.cached })
+    : null;
+  if (judge) console.log(`judge: ${judgeModel}`);
+  const searchCases = args.only === 'voice' ? [] : cases.filter((c) => (args.only ? c.source === args.only : c.source !== 'queries' || args.judge));
+  const rows = await runSearchCases(searchCases, videos, call, judge);
 
   const ok = (src) => rows.filter((r) => !r.error && (!src || r.source === src)).map((r) => r.score);
-  const agg = { chapters: aggregate(ok('chapters')), labelled: aggregate(ok('labelled')), all: aggregate(ok()) };
-  const prev = args.compare ? JSON.parse(readFileSync(args.compare, 'utf8')).aggregate : null;
+  const labelledOk = (s) => s.spots || s.absentOk != null;
+  const agg = {
+    chapters: aggregate(ok('chapters')), labelled: aggregate(ok('labelled')), all: aggregate(ok().filter(labelledOk)),
+  };
+  const judgedRows = (src) => rows.filter((r) => r.judge && (!src || r.source === src));
+  const judgeAgg = judge ? {
+    chapters: judgeAggregate(judgedRows('chapters').map((r) => r.judge)),
+    labelled: judgeAggregate(judgedRows('labelled').map((r) => r.judge)),
+    queries: judgeAggregate(judgedRows('queries').map((r) => r.judge)),
+    all: judgeAggregate(judgedRows().map((r) => r.judge)),
+    agreement: agreement(judgedRows('labelled').map((r) => ({ c: cases.find((c) => c.id === r.id), score: r.score, judged: r.judge }))),
+  } : null;
+  const prevRun = args.compare ? JSON.parse(readFileSync(args.compare, 'utf8')) : null;
+  const prev = prevRun?.aggregate;
 
   if (rows.length) printCases(rows);
   printAggregate('chapters', agg.chapters, prev?.chapters);
   printAggregate('labelled', agg.labelled, prev?.labelled);
   printAggregate('all', agg.all, prev?.all);
+  if (judgeAgg) {
+    printJudge(rows);
+    for (const k of ['chapters', 'labelled', 'queries', 'all']) printJudgeAggregate(k, judgeAgg[k], prevRun?.judge?.[k]);
+    printAgreement(judgeAgg.agreement);
+  }
   const errored = rows.filter((r) => r.error).length;
   if (errored) console.log(`\n${errored} case(s) errored and are left out of the numbers.`);
   const voice = !args.only || args.only === 'voice' ? await runVoice({ cache, call, cases, videos }) : null;
@@ -273,7 +348,7 @@ async function main() {
   try { commit = execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch {}
   const at = new Date().toISOString();
   const out = join(DIR.results, `${at.replace(/[:.]/g, '-')}.json`);
-  writeFileSync(out, JSON.stringify({ at, commit, args, config: CONFIG, aggregate: agg, cases: rows, voice }, null, 1));
+  writeFileSync(out, JSON.stringify({ at, commit, args, config: CONFIG, aggregate: agg, judge: judgeAgg, judgeModel: judge ? judgeModel : null, cases: rows, voice }, null, 1));
   console.log(`Saved ${out.slice(ROOT.length - 'eval/'.length)}`);
 }
 

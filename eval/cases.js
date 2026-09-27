@@ -70,3 +70,18 @@ export function loadLabelled(file, videos) {
   if (!existsSync(file)) return [];
   return labelledCases(JSON.parse(readFileSync(file, 'utf8')), videos);
 }
+
+// queries.json: [{ video, query }] with no labels, scored only by the LLM judge (--judge).
+export function queryCases(list, videos) {
+  return list.map((c, i) => {
+    const where = `queries.json #${i} "${c.query}"`;
+    if (!c.video || !c.query) throw new Error(`${where}: needs video and query`);
+    if (!videos[c.video]) throw new Error(`${where}: no export for video ${c.video} in eval/data/videos/`);
+    return { id: `${c.video}#Q${i}`, source: 'queries', video: c.video, query: c.query, spots: [], unlabelled: true, hideChapters: false };
+  });
+}
+
+export function loadQueries(file, videos) {
+  if (!existsSync(file)) return [];
+  return queryCases(JSON.parse(readFileSync(file, 'utf8')), videos);
+}

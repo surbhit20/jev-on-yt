@@ -108,6 +108,22 @@ changes don't hide location quality. Jump rate is reported next to it.
   case. The runner reports whether the landing point changes compared with the typed query.
   That is the number that matters to a user.
 
+## 7. LLM judge (added 2026-09-27)
+The user asked for an LLM judge. Decisions: judge with **OpenAI** (a different model from Jev,
+reusing the existing OpenAI key), and judge **all four** of: peak relevance, jump landing,
+missed spots, and free-form unlabelled queries.
+- `eval/judge.js`: chat completions with strict JSON schemas. Default model `gpt-4.1`
+  (`JUDGE_MODEL` overrides it). Answers are cached like Jev responses. Opt-in with `--judge`.
+- Peak: `discusses | passing | absent` for the lines under the peak; only `discusses` counts.
+- Landing: `at_start | early | late | off_topic` for a window of −90 s to +120 s around the
+  marked jump line, plus the line where the answer begins (landing error in seconds).
+- Spots: ranges of chunk ids over the whole transcript. Judge spots with no overlapping peak are
+  missed spots, and judged recall = judge spots with a peak / judge spots.
+- `eval/cases/queries.json`: unlabelled `{ video, query }` cases, scored only by the judge.
+- Judge metrics are reported next to the label-based ones, never mixed into them. On labelled cases
+  the run reports agreement between the judge and the hand labels (per peak, jump, absent topic,
+  and spot overlap both ways) and warns when any is under 80%.
+
 ## Layout
 ```
 src/search.js                    shared search core (new)
@@ -115,6 +131,7 @@ eval/run.js                      entry point (npm run eval)
 eval/cases.js                    load + generate cases
 eval/metrics.js                  pairing and metrics (pure, unit-tested)
 eval/wer.js                      word error rate (pure, unit-tested)
+eval/judge.js                    LLM judge prompts, readers, agreement (unit-tested)
 eval/data/videos/*.json          exported transcripts
 eval/data/voice/                 script, recordings, instant log
 eval/cases/labelled.json         hand labels

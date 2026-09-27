@@ -6,7 +6,8 @@ exported transcripts, and scores where the peaks and jumps land. Design:
 
 ```
 JEV_API_KEY=… npm run eval                      # everything
-npm run eval -- --only chapters|labelled|voice
+npm run eval -- --judge                         # add the LLM judge (OpenAI, needs OPENAI_API_KEY)
+npm run eval -- --only chapters|labelled|queries|voice
 npm run eval -- --video <id> --case <text>      # filter
 npm run eval -- --offline                       # cached responses only, no API calls
 npm run eval -- --fresh                         # ignore the cache
@@ -39,6 +40,25 @@ of a labelled case, so the runner can check whether the transcription still land
 - **Instant (Chrome):** with Instant on, hold Control and read the script lines in order on one
   tab. Then use **Dev · evals → Export voice log** and save it as `data/voice/instant.json`.
   The lines are matched by order, so don't retake any.
+
+## 4. LLM judge (`--judge`)
+An OpenAI model (default `gpt-4.1`, override with `JUDGE_MODEL`) grades every search result
+against the transcript, so it needs no labels:
+- **Peaks:** does the transcript under each peak substantively discuss the query? This gives
+  precision and false peaks on every case, chapters included.
+- **Landing:** with the jump point marked, is it `at_start`, `early`, `late` or `off_topic`?
+  It also gives the line where the answer begins, which becomes the landing error in seconds.
+- **Spots:** reads the whole transcript and lists every stretch on the query. Any it lists that
+  have no peak are **missed spots**, with their times printed.
+- **Free-form queries:** copy `cases/queries.example.json` to `cases/queries.json` for queries
+  with no labels. They only run with `--judge` (or `--only queries`).
+
+On hand-labelled cases the run also prints **judge vs your labels**: agreement on each peak, each
+jump and each absent topic, and spot overlap in both directions. Under 80% agreement, don't trust
+the judged numbers until the prompts in `eval/judge.js` are tightened.
+
+Cost per case: one call per peak, one landing call, and one call that reads the whole transcript.
+Verdicts are cached like Jev responses, keyed by model and prompt.
 
 ## Metrics
 | | |

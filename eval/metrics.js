@@ -32,10 +32,11 @@ export function jumpOk(jumpTime, spot, win = JUMP_WINDOW) {
   return jumpTime != null && jumpTime >= spot.start - win.beforeSec && jumpTime <= spot.start + win.afterSec;
 }
 
-// c: { spots: [{start, end}] (seconds), absent?, countFalse? }
+// c: { spots: [{start, end}] (seconds), absent?, countFalse?, unlabelled? (judge-only queries) }
 export function scoreCase(c, { decision, jumpTime, chunks }) {
   const peaks = peaksOf(decision, chunks);
   const out = { kind: decision.kind, peaks, jumpTime };
+  if (c.unlabelled) return out;
   if (c.absent) {
     return { ...out, absentOk: decision.kind === 'absent', falsePeaks: peaks.length };
   }
