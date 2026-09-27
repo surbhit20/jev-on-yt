@@ -124,6 +124,18 @@ missed spots, and free-form unlabelled queries.
   the run reports agreement between the judge and the hand labels (per peak, jump, absent topic,
   and spot overlap both ways) and warns when any is under 80%.
 
+## 8. Checking the eval itself (added 2026-09-27)
+The user asked how to know the results are accurate. `eval/checks.js`, all opt-in or cheap:
+- `--check` (no API): perfect answers must score perfectly; random-peak and whole-video floors;
+  your labels vs `cases/relabel.json` (a blind relabelling), where the gap is the noise floor
+  for start/end error.
+- 95% bootstrap ranges on every aggregate number (1000 resamples, fixed seed).
+- `--repeat n`: fresh Jev samples (cached under a per-repeat key); spread per metric = run-to-run noise.
+- `--split tune|holdout|all`, default `tune`: a fixed ~70/30 split by hash of video + query.
+- `--set key=value`: one-run numeric CONFIG overrides for tuning and "break it on purpose" checks.
+- With `--judge`: every judge-vs-label disagreement listed with the judge's reason.
+- README: a written labelling rule; target ~40 labelled queries.
+
 ## Layout
 ```
 src/search.js                    shared search core (new)
@@ -132,6 +144,7 @@ eval/cases.js                    load + generate cases
 eval/metrics.js                  pairing and metrics (pure, unit-tested)
 eval/wer.js                      word error rate (pure, unit-tested)
 eval/judge.js                    LLM judge prompts, readers, agreement (unit-tested)
+eval/checks.js                   baselines, ranges, split, noise, label consistency (unit-tested)
 eval/data/videos/*.json          exported transcripts
 eval/data/voice/                 script, recordings, instant log
 eval/cases/labelled.json         hand labels

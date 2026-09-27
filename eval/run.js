@@ -1,5 +1,7 @@
-// JEV_API_KEY=… [OPENAI_API_KEY=…] [JEV_ENDPOINT=…] [JUDGE_MODEL=…] npm run eval -- [--judge]
-//   [--only chapters|labelled|queries|voice] [--video <id>] [--case <text>] [--fresh] [--offline] [--compare <results.json>]
+// JEV_API_KEY=… [OPENAI_API_KEY=…] [JEV_ENDPOINT=…] [JUDGE_MODEL=…] npm run eval -- [--judge] [--check]
+//   [--only chapters|labelled|queries|voice] [--split tune|holdout|all] [--video <id>] [--case <text>]
+//   [--fresh] [--offline] [--repeat <n>] [--set <config key>=<number>] [--compare <results.json>]
+// See eval/README.md.
 // Runs the extension's search against the real Jev API on exported transcripts and scores it.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -11,9 +13,10 @@ import { runSearch } from '../src/pipeline.js';
 import { parseQuery } from '../src/query.js';
 import { callTranscribe } from '../src/openai_transcribe.js';
 import { formatTime } from '../src/time.js';
-import { loadVideos, prepareVideo, chapterCases, loadLabelled, loadQueries } from './cases.js';
+import { loadVideos, prepareVideo, chapterCases, loadLabelled, loadQueries, labelledCases } from './cases.js';
 import { scoreCase, aggregate, jumpOk } from './metrics.js';
 import { wer, keyTermsKept } from './wer.js';
+import { baselineScores, checkPerfect, bootstrap, splitCases, noise, labelConsistency, disagreements } from './checks.js';
 import { makeJudge, judgeCase, judgeAggregate, agreement, DEFAULT_JUDGE_MODEL, JUDGE_ENDPOINT } from './judge.js';
 
 const ROOT = new URL('.', import.meta.url).pathname;
@@ -22,19 +25,27 @@ const DIR = {
   voice: join(ROOT, 'data/voice'),
   labelled: join(ROOT, 'cases/labelled.json'),
   queries: join(ROOT, 'cases/queries.json'),
+  relabel: join(ROOT, 'cases/relabel.json'),
   cache: join(ROOT, 'cache'),
   results: join(ROOT, 'results'),
 };
 
 function parseArgs(argv) {
-  const a = { only: null, video: null, case: null, fresh: false, offline: false, judge: false, compare: null };
+  const a = {
+    only: null, video: null, case: null, fresh: false, offline: false, judge: false, check: false, compare: null,
+    split: 'tune', repeat: 1, set: [],
+  };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, '');
-    if (k === 'fresh' || k === 'offline' || k === 'judge') a[k] = true;
+    if (k === 'fresh' || k === 'offline' || k === 'judge' || k === 'check') a[k] = true;
+    else if (k === 'set') a.set.push(argv[++i]);
+    else if (k === 'repeat') a.repeat = Number(argv[++i]);
     else if (k in a) a[k] = argv[++i];
     else throw new Error(`unknown option ${argv[i]}`);
   }
   if (a.only && !['chapters', 'labelled', 'queries', 'voice'].includes(a.only)) throw new Error('--only takes chapters, labelled, queries or voice');
+  if (!['tune', 'holdout', 'all'].includes(a.split)) throw new Error('--split takes tune, holdout or all');
+  if (!Number.isInteger(a.repeat) || a.repeat < 1) throw new Error('--repeat takes a whole number ≥ 1');
   if (a.only === 'queries') a.judge = true; // unlabelled queries have nothing to score without the judge
   return a;
 }
@@ -63,11 +74,13 @@ function makeCache(args) {
 
 const JEV_ENDPOINT = process.env.JEV_ENDPOINT || CONFIG.endpoint;
 
-function makeJevCall(cache, misses) {
+// Repeat 0 is the normal cached answer; repeats 1..n-1 are separate fresh samples (cached too, so a
+// noise measurement can be re-read offline).
+function makeJevCall(cache, misses, repeat = 0) {
   const apiKey = process.env.JEV_API_KEY;
   return async (body) => {
     try {
-      return await cache.cached(`jev|${JEV_ENDPOINT}|${JSON.stringify(body)}`, async () => {
+      return await cache.cached(`jev|${JEV_ENDPOINT}|${JSON.stringify(body)}${repeat ? `|repeat ${repeat}` : ''}`, async () => {
         if (!apiKey) throw Object.assign(new Error('JEV_API_KEY is not set'), { status: 'nokey' });
         const r = await callJev(body, { apiKey, endpoint: JEV_ENDPOINT, tries: CONFIG.retryTries, baseMs: CONFIG.retryBaseMs });
         return { data: r.data };
@@ -121,20 +134,23 @@ function printCases(rows) {
   }
 }
 
-function printAggregate(name, a, prev) {
+function printAggregate(name, a, prev, ci) {
   if (!a?.cases) return;
   const d = (k, sub, scale = 1, digits = 1) => {
     const now = sub ? a[k][sub] : a[k];
     const was = prev ? (sub ? prev[k]?.[sub] : prev[k]) : null;
     return now != null && was != null ? ` (${now - was >= 0 ? '+' : ''}${((now - was) * scale).toFixed(digits)})` : '';
   };
+  // 95% range from resampling the cases: how far the number could move with a different set of cases.
+  const r = (path, fmt) => (ci?.[path] ? ` [${fmt(ci[path][0])}–${fmt(ci[path][1])}]` : '');
+  const sec = (v) => (v == null ? '–' : `${f(v, 1)}s`);
   console.log(`\n${name}: ${a.cases} cases`);
-  console.log(`  start error  mean ${f(a.startErr.mean, 1)}s${d('startErr', 'mean')}  p90 ${f(a.startErr.p90, 1)}s${d('startErr', 'p90')}`);
-  console.log(`  end error    mean ${f(a.endErr.mean, 1)}s${d('endErr', 'mean')}  p90 ${f(a.endErr.p90, 1)}s${d('endErr', 'p90')}`);
-  console.log(`  recall       ${pct(a.recall)}${d('recall', null, 100, 0)}`);
-  if (a.falsePeaks != null) console.log(`  false peaks  ${f(a.falsePeaks, 2)} per case${d('falsePeaks', null, 1, 2)}`);
-  console.log(`  jump acc     ${pct(a.jumpAcc)}${d('jumpAcc', null, 100, 0)}   (jump rate ${pct(a.jumpRate)})`);
-  if (a.absentPass != null) console.log(`  absent pass  ${pct(a.absentPass)}${d('absentPass', null, 100, 0)}`);
+  console.log(`  start error  mean ${sec(a.startErr.mean)}${r('startErr.mean', sec)}${d('startErr', 'mean')}  p90 ${sec(a.startErr.p90)}${d('startErr', 'p90')}`);
+  console.log(`  end error    mean ${sec(a.endErr.mean)}${r('endErr.mean', sec)}${d('endErr', 'mean')}  p90 ${sec(a.endErr.p90)}${d('endErr', 'p90')}`);
+  console.log(`  recall       ${pct(a.recall)}${r('recall', pct)}${d('recall', null, 100, 0)}`);
+  if (a.falsePeaks != null) console.log(`  false peaks  ${f(a.falsePeaks, 2)}${r('falsePeaks', (v) => f(v, 2))} per case${d('falsePeaks', null, 1, 2)}`);
+  console.log(`  jump acc     ${pct(a.jumpAcc)}${r('jumpAcc', pct)}${d('jumpAcc', null, 100, 0)}   (jump rate ${pct(a.jumpRate)})`);
+  if (a.absentPass != null) console.log(`  absent pass  ${pct(a.absentPass)}${r('absentPass', pct)}${d('absentPass', null, 100, 0)}`);
 }
 
 function printJudge(rows) {
@@ -171,6 +187,59 @@ function printAgreement(a) {
   const low = [a.peaks, a.jump, a.absent, a.spotRecall, a.spotPrecision].some((v) => v != null && v < 0.8);
   if (low) console.log('  Agreement under 80%: read the judged numbers with care, or tighten the judge prompts.');
 }
+
+function printDisagreements(list) {
+  if (!list.length) return;
+  console.log(`\njudge disagrees with your labels (${list.length}): check who is right, then fix the label or the judge prompt`);
+  for (const x of list) {
+    console.log(`  ${pad(x.id, 16)} ${pad(x.query, 30)} ${pad(x.what, 6)} ${pad(x.at == null ? '–' : formatTime(x.at), 8)} ` +
+      `you: ${pad(x.human, 10)} judge: ${pad(x.judge, 12)} ${x.reason ?? ''}`);
+  }
+}
+
+// --set relevance threshold etc. for one run, e.g. --set relT=0.6. Numbers only, existing keys only.
+function applySets(sets) {
+  const applied = {};
+  for (const kv of sets) {
+    const m = /^(\w+)=(-?[\d.]+)$/.exec(kv ?? '');
+    if (!m || typeof CONFIG[m[1]] !== 'number') throw new Error(`--set ${kv}: use <numeric CONFIG key>=<number>`);
+    applied[m[1]] = { from: CONFIG[m[1]], to: Number(m[2]) };
+    CONFIG[m[1]] = Number(m[2]);
+  }
+  return applied;
+}
+
+// --check: no API calls. Fake answers through the metrics, plus your labels against a relabelling.
+function runChecks(cases, videos) {
+  const scored = cases.filter((c) => !c.unlabelled);
+  if (!scored.length) {
+    console.log('--check: no labelled or chapter cases yet.');
+    return true;
+  }
+  const b = baselineScores(scored, (c) => videos[c.video].durationSec);
+  const perfect = checkPerfect(aggregate(b.perfect));
+  const broken = perfect.filter((x) => !x.ok);
+  console.log(`\nmetric check: perfect answers (peaks = your labels) on ${scored.length} cases`);
+  for (const x of perfect) console.log(`  ${x.ok ? '✓' : '✗'} ${pad(x.name, 17)} ${f(x.got, 2)} (expected ${x.expected})`);
+  console.log(broken.length ? '  METRICS ARE BROKEN: fix eval/metrics.js before trusting any number.' : '  Metrics score a perfect answer as perfect.');
+  printAggregate('floor: random peaks (Jev must beat this on every line)', aggregate(b.random));
+  printAggregate('floor: one peak covering the whole video', aggregate(b.whole));
+
+  if (existsSync(DIR.relabel)) {
+    const first = scored.filter((c) => c.source === 'labelled');
+    const second = labelledCases(JSON.parse(readFileSync(DIR.relabel, 'utf8')), videos);
+    const lc = labelConsistency(first, second);
+    console.log(`\nyour labels vs relabel.json (${lc.pairs} queries)`);
+    console.log(`  start differs by ${f(lc.start.mean, 1)}s on average (p90 ${f(lc.start.p90, 1)}s); end by ${f(lc.end.mean, 1)}s (p90 ${f(lc.end.p90, 1)}s)`);
+    console.log('  Start/end errors below these are labelling noise, not real differences.');
+    for (const x of lc.issues) console.log(`  ! ${x}`);
+  } else {
+    console.log('\nNo cases/relabel.json yet: relabel ~10 queries without looking, to measure your own labelling noise.');
+  }
+  return !broken.length;
+}
+
+
 
 async function runSearchCases(cases, videos, call, judge) {
   const rows = [];
@@ -289,19 +358,32 @@ async function runVoice({ cache, call, cases, videos }) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const sets = applySets(args.set);
   const all = loadVideos(DIR.videos);
   const videos = Object.fromEntries(Object.entries(all).map(([id, v]) => [id, prepareVideo(v, CONFIG)]));
   if (!Object.keys(videos).length) {
     console.log('No videos in eval/data/videos/. Export some from the extension popup (Dev · evals) first.');
     return;
   }
-  if (!args.offline && !process.env.JEV_API_KEY) console.warn('JEV_API_KEY is not set: only cached responses will work.');
-
   let cases = [
     ...Object.values(videos).flatMap(chapterCases), ...loadLabelled(DIR.labelled, videos), ...loadQueries(DIR.queries, videos),
   ];
   if (args.video) cases = cases.filter((c) => c.video === args.video);
   if (args.case) cases = cases.filter((c) => c.id.includes(args.case) || c.query.toLowerCase().includes(args.case.toLowerCase()));
+  if (args.check) {
+    if (!runChecks(cases, videos)) process.exitCode = 1;
+    return;
+  }
+  if (!args.offline && !process.env.JEV_API_KEY) console.warn('JEV_API_KEY is not set: only cached responses will work.');
+  for (const [k, v] of Object.entries(sets)) console.log(`--set ${k}: ${v.from} → ${v.to}`);
+  const allCases = cases; // voice lines look up their labelled case in every split
+  const hidden = cases.length - splitCases(cases, args.split).length;
+  cases = splitCases(cases, args.split);
+  if (args.split !== 'all') {
+    console.log(args.split === 'tune'
+      ? `split: tune set (${hidden} held-back case(s) hidden; check them once at the end with --split holdout)`
+      : `split: HOLDOUT (${cases.length} cases). Don't tune on these numbers.`);
+  }
 
   const cache = makeCache(args);
   const call = (misses) => makeJevCall(cache, misses);
@@ -312,9 +394,15 @@ async function main() {
   if (judge) console.log(`judge: ${judgeModel}`);
   const searchCases = args.only === 'voice' ? [] : cases.filter((c) => (args.only ? c.source === args.only : c.source !== 'queries' || args.judge));
   const rows = await runSearchCases(searchCases, videos, call, judge);
+  const labelledOk = (s) => s.spots || s.absentOk != null;
+  const allOf = (rs) => aggregate(rs.filter((r) => !r.error).map((r) => r.score).filter(labelledOk));
+  const repeats = [allOf(rows)];
+  for (let i = 1; i < args.repeat; i++) {
+    console.log(`repeat ${i + 1}/${args.repeat}…`);
+    repeats.push(allOf(await runSearchCases(searchCases, videos, (misses) => makeJevCall(cache, misses, i), null)));
+  }
 
   const ok = (src) => rows.filter((r) => !r.error && (!src || r.source === src)).map((r) => r.score);
-  const labelledOk = (s) => s.spots || s.absentOk != null;
   const agg = {
     chapters: aggregate(ok('chapters')), labelled: aggregate(ok('labelled')), all: aggregate(ok().filter(labelledOk)),
   };
@@ -326,21 +414,37 @@ async function main() {
     all: judgeAggregate(judgedRows().map((r) => r.judge)),
     agreement: agreement(judgedRows('labelled').map((r) => ({ c: cases.find((c) => c.id === r.id), score: r.score, judged: r.judge }))),
   } : null;
+  const ci = {
+    chapters: bootstrap(ok('chapters')), labelled: bootstrap(ok('labelled')), all: bootstrap(ok().filter(labelledOk)),
+  };
+  const disagree = judge
+    ? disagreements(judgedRows('labelled').map((r) => ({ id: r.id, c: cases.find((c) => c.id === r.id), score: r.score, judged: r.judge })))
+    : [];
   const prevRun = args.compare ? JSON.parse(readFileSync(args.compare, 'utf8')) : null;
   const prev = prevRun?.aggregate;
 
   if (rows.length) printCases(rows);
-  printAggregate('chapters', agg.chapters, prev?.chapters);
-  printAggregate('labelled', agg.labelled, prev?.labelled);
-  printAggregate('all', agg.all, prev?.all);
+  printAggregate('chapters', agg.chapters, prev?.chapters, ci.chapters);
+  printAggregate('labelled', agg.labelled, prev?.labelled, ci.labelled);
+  printAggregate('all', agg.all, prev?.all, ci.all);
+  if (agg.all.cases) console.log('\n[ranges] are 95% ranges over the cases: a change inside them may be luck.');
+  const spread = args.repeat > 1 ? noise(repeats) : null;
+  if (spread) {
+    console.log(`\nrun-to-run noise over ${args.repeat} fresh runs (all cases): a change smaller than this is noise`);
+    for (const [k, v] of Object.entries(spread)) {
+      const fmt = /Err/.test(k) ? (x) => (x == null ? '–' : `${f(x, 1)}s`) : k === 'falsePeaks' ? (x) => f(x, 2) : pct;
+      console.log(`  ${pad(k, 15)} ${fmt(v.min)} – ${fmt(v.max)}  (spread ${fmt(v.spread)})`);
+    }
+  }
   if (judgeAgg) {
     printJudge(rows);
     for (const k of ['chapters', 'labelled', 'queries', 'all']) printJudgeAggregate(k, judgeAgg[k], prevRun?.judge?.[k]);
     printAgreement(judgeAgg.agreement);
+    printDisagreements(disagree);
   }
   const errored = rows.filter((r) => r.error).length;
   if (errored) console.log(`\n${errored} case(s) errored and are left out of the numbers.`);
-  const voice = !args.only || args.only === 'voice' ? await runVoice({ cache, call, cases, videos }) : null;
+  const voice = !args.only || args.only === 'voice' ? await runVoice({ cache, call, cases: allCases, videos }) : null;
   console.log(`\nJev/OpenAI: ${cache.stats.calls} calls, ${cache.stats.hits} cached${cache.stats.misses ? `, ${cache.stats.misses} missing (--offline)` : ''}`);
 
   mkdirSync(DIR.results, { recursive: true });
@@ -348,7 +452,7 @@ async function main() {
   try { commit = execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch {}
   const at = new Date().toISOString();
   const out = join(DIR.results, `${at.replace(/[:.]/g, '-')}.json`);
-  writeFileSync(out, JSON.stringify({ at, commit, args, config: CONFIG, aggregate: agg, judge: judgeAgg, judgeModel: judge ? judgeModel : null, cases: rows, voice }, null, 1));
+  writeFileSync(out, JSON.stringify({ at, commit, args, config: CONFIG, sets, aggregate: agg, ranges: ci, noise: spread, judge: judgeAgg, disagreements: disagree, judgeModel: judge ? judgeModel : null, cases: rows, voice }, null, 1));
   console.log(`Saved ${out.slice(ROOT.length - 'eval/'.length)}`);
 }
 

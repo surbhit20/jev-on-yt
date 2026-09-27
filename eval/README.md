@@ -5,7 +5,11 @@ exported transcripts, and scores where the peaks and jumps land. Design:
 `docs/superpowers/specs/2026-09-27-evals-design.md`.
 
 ```
-JEV_API_KEY=… npm run eval                      # everything
+npm run eval -- --check                         # no API: are the metrics and your labels sound?
+JEV_API_KEY=… npm run eval                      # tune set (70% of cases)
+npm run eval -- --split holdout                 # the 30% held back, once, at the end
+npm run eval -- --repeat 3                      # measure run-to-run noise
+npm run eval -- --set relT=0.6                  # try a threshold without editing config.js
 npm run eval -- --judge                         # add the LLM judge (OpenAI, needs OPENAI_API_KEY)
 npm run eval -- --only chapters|labelled|queries|voice
 npm run eval -- --video <id> --case <text>      # filter
@@ -28,9 +32,21 @@ chapter = the true spot. Generic titles (intro, outro, sponsor…) and chapters 
 skipped. These cases run with chapters hidden, because chapters feed the start signal.
 
 ## 2. Hand-label cases
-Copy `cases/labelled.example.json` to `cases/labelled.json`. Mark **every** place the topic comes
-up (`mm:ss` or `h:mm:ss`), because peaks outside the marked spots count as false. Use
-`"absent": true` for topics that aren't in the video. The first spot is the one a jump should land on.
+Copy `cases/labelled.example.json` to `cases/labelled.json`. Aim for **~40 queries**: with 10,
+"70% jump accuracy" could really be anywhere from about 40% to 90%. Mix topics that come up once,
+topics that come up several times, topics that aren't in the video, and vague vs specific wording.
+
+**Labelling rule.** Follow it every time:
+- **Label before looking at Jev's peaks.** Seeing its answer first pulls your labels toward it.
+- **Start** = the first sentence that actually discusses the topic. A teaser ("later I'll get to…")
+  doesn't count, and neither does the lead-in.
+- **End** = the last sentence on the topic, before they move on. Short asides (under ~30 s) that
+  come back to the topic stay inside one spot.
+- A mention **under ~15 s**, or only in passing, is not a spot.
+- Mark **every** spot. Peaks outside your spots count as false.
+- The **first spot** is where a jump should land. Put the main answer first if it isn't the earliest.
+- `"absent": true` for topics the video never discusses.
+- Times as `mm:ss` or `h:mm:ss`.
 
 ## 3. Voice-to-text
 Copy `data/voice/script.example.json` to `data/voice/script.json`. `case` (optional) is the `query`
@@ -59,6 +75,33 @@ the judged numbers until the prompts in `eval/judge.js` are tightened.
 
 Cost per case: one call per peak, one landing call, and one call that reads the whole transcript.
 Verdicts are cached like Jev responses, keyed by model and prompt.
+
+## 5. Is the eval itself right?
+Five checks, from cheapest to most real:
+1. **Metrics** (`--check`, no API): perfect answers (peaks = your labels) must score perfectly,
+   or the scoring code is broken. It also prints two floors Jev has to beat on every line: random
+   peaks, and one peak covering the whole video.
+2. **Your labels** (`--check`): relabel ~10 queries a week later **without looking** at the old
+   ones, into `cases/relabel.json` (same format). The run prints how far your two labellings
+   differ. Start/end errors smaller than that gap are labelling noise, so don't tune to beat it.
+3. **Luck** (every run): each number has a **[95% range]** from resampling the cases. If a change
+   moves a number but stays inside the old range, it may be luck. More cases narrow the ranges.
+4. **Noise** (`--repeat 3`): Jev can answer differently each time, and the cache hides that.
+   Repeats are fresh samples (cached separately), and the run prints how much each number moves
+   on its own. A change has to beat that spread.
+5. **Overfitting** (`--split`): cases are split about 70/30 by video + query, and the split never
+   changes. Tune on the default `tune` set, then check `--split holdout` **once** at the end. If
+   holdout is much worse, the thresholds were fitted to the tune cases.
+
+Also break something on purpose (e.g. `--set relT=0.95`) and check the numbers drop. If they
+don't, the eval isn't measuring what you changed.
+
+With `--judge`, labelled cases also print every **disagreement** between the judge and your
+labels, with the judge's reason. Read them: fix your label when the judge is right, and tighten
+the prompt in `judge.js` when it isn't.
+
+The real test is people using it: how often they press Undo, press next, or keep watching after
+a jump. If eval numbers improve but those don't, the eval is measuring the wrong thing.
 
 ## Metrics
 | | |

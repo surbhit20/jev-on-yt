@@ -34,11 +34,15 @@ export function jumpOk(jumpTime, spot, win = JUMP_WINDOW) {
 
 // c: { spots: [{start, end}] (seconds), absent?, countFalse?, unlabelled? (judge-only queries) }
 export function scoreCase(c, { decision, jumpTime, chunks }) {
-  const peaks = peaksOf(decision, chunks);
-  const out = { kind: decision.kind, peaks, jumpTime };
+  return scorePeaks(c, { kind: decision.kind, peaks: peaksOf(decision, chunks), jumpTime });
+}
+
+// Same scoring from peaks as time ranges (also used by the fake-answer checks).
+export function scorePeaks(c, { kind, peaks, jumpTime }) {
+  const out = { kind, peaks, jumpTime };
   if (c.unlabelled) return out;
   if (c.absent) {
-    return { ...out, absentOk: decision.kind === 'absent', falsePeaks: peaks.length };
+    return { ...out, absentOk: kind === 'absent', falsePeaks: peaks.length };
   }
   const bySpot = pairSpots(c.spots, peaks);
   const spots = c.spots.map((s, i) => {
@@ -52,7 +56,7 @@ export function scoreCase(c, { decision, jumpTime, chunks }) {
     recall: spots.filter((s) => s.peak).length / spots.length,
     falsePeaks: c.countFalse ? peaks.filter((p, i) => !paired.has(i) && !c.spots.some((s) => overlap(s, p) > 0)).length : null,
     jumpOk: jumpOk(jumpTime, c.spots[0]),
-    jumped: decision.kind === 'jump',
+    jumped: kind === 'jump',
   };
 }
 
