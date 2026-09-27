@@ -32,6 +32,12 @@ staleness checks, the cached start promise and intent, and calls `runSearch` for
 The eval calls the same function, so it cannot drift from what the extension does.
 Existing tests must stay green. Add unit tests for `runSearch` with a fake `call`.
 
+*As built:* `src/search.js` holds only the pure steps (`startSignal`, `decideFromAnswers`,
+`refineRange`, `jumpTimeFor`), which `app.js` uses between its UI updates. `runSearch` lives in
+`src/pipeline.js`, next to the Jev calls, so the page-side app never loads Jev-calling code.
+`runSearch` refines the top peak even for highlight decisions, so jump accuracy is always
+measurable.
+
 ## 2. Test data: exported from the extension
 YouTube captions are hard to fetch from Node, so the extension exports them.
 - Dev-only (`CONFIG.dev`): a way to download the current video as

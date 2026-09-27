@@ -1,0 +1,5 @@
+[
+  { "video": "VIDEO_ID", "query": "where does he talk about hill training",
+    "spots": [{ "start": "12:40", "end": "15:05" }, { "start": "41:10", "end": "42:30" }] },
+  { "video": "VIDEO_ID", "query": "sponsorship deals", "absent": true }
+]
