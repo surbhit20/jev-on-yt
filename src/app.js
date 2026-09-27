@@ -49,6 +49,7 @@ export function start() {
   let preparingShown = false; // "Getting things ready" is on screen from a Control hold
   let searchSeq = 0; // guards against out-of-order search() calls for the same video
   let searching = false;
+  const voiceLog = []; // dev: what each engine heard, exported for the voice-to-text eval
 
   async function send(msg) {
     const res = await chrome.runtime.sendMessage(msg);
@@ -119,7 +120,7 @@ export function start() {
     const gen = ++video.gen;
     Object.assign(video, {
       id: videoId, status: videoId ? 'preparing' : 'idle',
-      lines: null, chapters: [], chunks: null, windows: null, startPromise: null, durationSec: 0,
+      title: '', lines: null, chapters: [], chunks: null, windows: null, startPromise: null, durationSec: 0,
     });
     if (!videoId) return;
 
@@ -145,7 +146,7 @@ export function start() {
     const chunks = chunker.buildChunks(result.lines, chunkSec, CONFIG.sentenceSlack);
     const windows = chunker.buildWindows(chunks, CONFIG.windowSize, CONFIG.windowOverlap);
     Object.assign(video, {
-      status: 'ready', lines: result.lines, chapters, chunks, windows, durationSec,
+      status: 'ready', title: info.title ?? '', lines: result.lines, chapters, chunks, windows, durationSec,
       startPromise: startPass(videoId, chunks, windows, chapters),
     });
     log(`${videoId} "${info.title}" ready via ${result.method} in ${Math.round(performance.now() - t0)} ms: ` +
@@ -399,12 +400,19 @@ export function start() {
           });
           return;
         }
-        if (engine === 'chrome') return submit(text);
-        if (!audio || audio.bytes < CONFIG.openai.minAudioBytes) return submit('');
+        if (engine === 'chrome') {
+          voiceLog.push({ engine, text: text ?? '' });
+          return submit(text);
+        }
+        if (!audio || audio.bytes < CONFIG.openai.minAudioBytes) {
+          voiceLog.push({ engine, text: '' });
+          return submit('');
+        }
         toast.show({ title: 'Transcribing…' });
         try {
           const res = await send({ type: 'transcribe', audio });
           if (seq !== holdSeq) return;
+          voiceLog.push({ engine, text: res.text });
           submit(res.text);
         } catch (err) {
           if (seq === holdSeq) showError(err);
@@ -452,6 +460,28 @@ export function start() {
     },
   });
 
+  // Dev-only exports for the evals, triggered from the toolbar popup.
+  function download(name, data) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const devExports = {
+    exportTranscript() {
+      if (video.status !== 'ready') return { ok: false, error: 'No transcript loaded on this tab yet.' };
+      const { id: videoId, title, durationSec, lines, chapters } = video;
+      download(`${videoId}.json`, { videoId, title, durationSec, lines, chapters });
+      return { ok: true };
+    },
+    exportVoiceLog() {
+      if (!voiceLog.length) return { ok: false, error: 'No voice results on this tab yet.' };
+      download('instant.json', voiceLog);
+      return { ok: true, count: voiceLog.length };
+    },
+  };
+
   const swallow = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
   window.addEventListener('keydown', (e) => { if (keys.keydown(e)) swallow(e); }, true);
   window.addEventListener('keyup', (e) => { if (keys.keyup(e)) swallow(e); }, true);
@@ -461,6 +491,12 @@ export function start() {
 
   refreshVoiceEngine();
   window.addEventListener('focus', refreshVoiceEngine);
+  if (CONFIG.dev) chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    const handler = devExports[msg?.type];
+    if (!handler) return false;
+    sendResponse(handler());
+    return false;
+  });
   globalThis.jev = { ask: submit, video, get last() { return last; } };
   prepare().catch((e) => log('prepare failed:', e.message));
 }

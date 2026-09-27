@@ -32,6 +32,12 @@
       margin-top: 8px; padding: 6px 12px; border: 0; border-radius: 8px; cursor: pointer;
       background: #efece4; color: #111; font: 500 12.5px/1.2 var(--font);
     }
+    .dev { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+    .dev button {
+      margin: 0 6px 6px 0; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+      background: #1c1c1c; color: #f5f5f5; cursor: pointer; font: 500 12.5px/1.2 var(--font);
+    }
+    .dev .hint { min-height: 0; margin-top: 4px; }
     .footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
     .footer a { color: #d4d4d4; text-decoration: none; cursor: pointer; }
     .footer a:hover { color: #fff; }
@@ -49,6 +55,12 @@
   <div class="notice" id="notice" hidden>
     Add an OpenAI key to use Accurate.
     <div><button id="addKey">Open settings</button></div>
+  </div>
+  <div class="dev" id="dev" hidden>
+    <div class="label">Dev · evals</div>
+    <button id="exportTranscript">Export transcript</button>
+    <button id="exportVoiceLog">Export voice log</button>
+    <div class="hint" id="devStatus"></div>
   </div>
   <div class="footer"><a id="settings">Settings</a></div>
   <script type="module" src="popup.js"></script>

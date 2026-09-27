@@ -1,4 +1,5 @@
 import { DEFAULT_VOICE_MODE } from '../src/voice_mode.js';
+import { CONFIG } from '../src/config.js';
 
 const $ = (id) => document.getElementById(id);
 const HINTS = {
@@ -37,3 +38,20 @@ $('instant').addEventListener('click', () => choose('instant'));
 $('accurate').addEventListener('click', () => choose('accurate'));
 $('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('addKey').addEventListener('click', () => chrome.runtime.openOptionsPage());
+
+// Dev: ask the YouTube tab to download its transcript or voice log for the evals.
+async function devExport(type) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let res;
+  try {
+    res = await chrome.tabs.sendMessage(tab.id, { type });
+  } catch {
+    res = { ok: false, error: 'Open a YouTube video first.' };
+  }
+  $('devStatus').textContent = res?.ok ? `Downloaded${res.count ? ` (${res.count} lines)` : ''}.` : res?.error ?? 'No response.';
+}
+if (CONFIG.dev) {
+  $('dev').hidden = false;
+  $('exportTranscript').addEventListener('click', () => devExport('exportTranscript'));
+  $('exportVoiceLog').addEventListener('click', () => devExport('exportVoiceLog'));
+}
