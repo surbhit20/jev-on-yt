@@ -63,7 +63,7 @@ $('osave').addEventListener('click', async () => {
     return;
   }
   await chrome.storage.local.set({ openaiKey: value });
-  setOStatus('Saved. Choose Accurate from the Jev YT toolbar button to use it.');
+  setOStatus('Saved. Choose Accurate from the Flash toolbar button to use it.');
 });
 
 $('otest').addEventListener('click', async () => {

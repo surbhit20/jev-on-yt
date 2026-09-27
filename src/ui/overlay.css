@@ -1,4 +1,4 @@
-/* Jev YT: heatmap layer inside .ytp-progress-bar and a toast inside #movie_player. */
+/* Flash: heatmap layer inside .ytp-progress-bar and a toast inside #movie_player. */
 
 .jev-heat { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
 /* Invisible click targets over hot spots; the wave above the bar is the visual. */

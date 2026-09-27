@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Jev YT",
+  "name": "Flash",
   "version": "0.1.0",
   "description": "Ask a YouTube video a question and jump to the answer.",
   "permissions": [
@@ -67,7 +67,7 @@
   ],
   "options_page": "options/options.html",
   "action": {
-    "default_title": "Jev YT",
+    "default_title": "Flash",
     "default_popup": "popup/popup.html"
   },
   "optional_host_permissions": [

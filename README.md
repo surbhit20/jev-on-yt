@@ -1,4 +1,4 @@
-# Jev YT
+# Flash
 
 Ask a YouTube video a question and jump to the answer. Hold **Control** and say
 "skip to where he talks about caffeine", and the video jumps there. If the answer isn't clear,
@@ -10,7 +10,7 @@ Scoring uses [TypeSafe](https://typesafe.ai)'s Jev model with your own API key.
 
 1. Clone this repo.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the repo folder.
-3. Click the Jev YT toolbar icon, paste your TypeSafe API key, and click **Save**, then **Test key**.
+3. Click the Flash toolbar icon, paste your TypeSafe API key, and click **Save**, then **Test key**.
 4. Optional: add an OpenAI API key under **Voice**, then pick **Accurate** from the toolbar button's popup. **Instant** (the default) uses Chrome's built-in voice.
 
 ## Use
@@ -40,6 +40,6 @@ Questions that start with "show", "where", "find" or "highlight" only highlight,
 ## Development
 
 - `npm test` runs the unit tests (Node 20+).
-- Debug from the YouTube tab's DevTools: choose the **Jev YT** console context and run
+- Debug from the YouTube tab's DevTools: choose the **Flash** console context and run
   `await jev.ask("your question")`. API timings and token counts are logged in the extension's
   service worker console.
