@@ -37,4 +37,4 @@ Removing the extension deletes all of it.
 
 ## Contact
 
-Questions: YOUR-CONTACT-EMAIL (replace before publishing)
+Questions: surbhitpratik15@gmail.com
