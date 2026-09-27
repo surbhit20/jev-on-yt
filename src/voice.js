@@ -71,3 +71,60 @@ export function createVoice({ lang, onInterim }) {
 
   return { supported: !!SR, start, stop, abort };
 }
+
+// Records the mic while Control is held, for OpenAI transcription. Same shape as createVoice:
+// stop() resolves { audio: { base64, mimeType, bytes } | null, error }.
+export function createRecorderVoice({ toBase64 }) {
+  const supported = !!(globalThis.navigator?.mediaDevices?.getUserMedia && globalThis.MediaRecorder);
+  let session = null;
+
+  const release = (s) => s.stream?.getTracks().forEach((t) => t.stop());
+
+  function start() {
+    if (!supported) throw new Error('unsupported');
+    abort();
+    const s = { chunks: [], stream: null, recorder: null, error: null, cancelled: false };
+    s.ready = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then((stream) => {
+        s.stream = stream;
+        if (s.cancelled) return release(s);
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
+        s.recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        s.recorder.ondataavailable = (e) => { if (e.data?.size) s.chunks.push(e.data); };
+        s.recorder.start();
+      })
+      .catch((e) => { s.error = e?.name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture'; });
+    session = s;
+  }
+
+  async function stop() {
+    const s = session;
+    session = null;
+    if (!s) return { audio: null, error: null };
+    await s.ready;
+    if (s.error || !s.recorder) {
+      release(s);
+      return { audio: null, error: s.error ?? 'aborted' };
+    }
+    const stopped = new Promise((r) => { s.recorder.onstop = r; });
+    s.recorder.stop();
+    await stopped;
+    release(s);
+    const blob = new Blob(s.chunks, { type: s.recorder.mimeType || 'audio/webm' });
+    const base64 = toBase64(new Uint8Array(await blob.arrayBuffer()));
+    return { audio: { base64, mimeType: blob.type, bytes: blob.size }, error: null };
+  }
+
+  function abort() {
+    const s = session;
+    session = null;
+    if (!s) return;
+    s.cancelled = true;
+    s.ready?.then(() => {
+      try { if (s.recorder && s.recorder.state !== 'inactive') s.recorder.stop(); } catch {}
+      release(s);
+    });
+  }
+
+  return { supported, start, stop, abort };
+}

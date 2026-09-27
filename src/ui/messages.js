@@ -7,6 +7,9 @@ export function errorToast(err) {
   if (s === 403) return { title: 'TypeSafe denied access. Check your key or plan', settings: true };
   if (s === 429 || s === 529) return { title: 'TypeSafe is busy, try again', settings: false };
   if (s === 'network') return { title: "Can't reach TypeSafe", settings: false };
+  if (s === 'openai:401') return { title: 'OpenAI key rejected', settings: true };
+  if (s === 'openai:network') return { title: "Couldn't reach OpenAI", settings: false };
+  if (String(s).startsWith('openai:')) return { title: "Transcription didn't work, try again", settings: false };
   return { title: 'Something went wrong', settings: false };
 }
 

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Flash</title>
+  <style>
+    :root { --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+    html, body { margin: 0; background: #000; }
+    body {
+      width: 280px; padding: 16px; box-sizing: border-box; color: #fff;
+      font: 400 13px/1.45 var(--font); -webkit-font-smoothing: antialiased;
+    }
+    h1 { margin: 0 0 14px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .label { color: #a3a3a3; font-size: 12px; margin-bottom: 8px; }
+    .switch {
+      position: relative; display: grid; grid-template-columns: 1fr 1fr;
+      padding: 3px; border-radius: 10px; background: #1c1c1c; border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .thumb {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px);
+      border-radius: 8px; background: #efece4; transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .switch[data-mode="accurate"] .thumb { transform: translateX(100%); }
+    .switch button {
+      position: relative; z-index: 1; padding: 7px 0; border: 0; background: none; cursor: pointer;
+      font: 500 13px/1.2 var(--font); color: #d4d4d4; transition: color 220ms;
+    }
+    .switch button[aria-pressed="true"] { color: #111; }
+    .hint { margin-top: 10px; min-height: 36px; color: #a3a3a3; }
+    .notice { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #1c1c1c; color: #f5f5f5; }
+    .notice button {
+      margin-top: 8px; padding: 6px 12px; border: 0; border-radius: 8px; cursor: pointer;
+      background: #efece4; color: #111; font: 500 12.5px/1.2 var(--font);
+    }
+    .dev { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+    .dev button {
+      margin: 0 6px 6px 0; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+      background: #1c1c1c; color: #f5f5f5; cursor: pointer; font: 500 12.5px/1.2 var(--font);
+    }
+    .dev .hint { min-height: 0; margin-top: 4px; }
+    .footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+    .footer a { color: #d4d4d4; text-decoration: none; cursor: pointer; }
+    .footer a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>Flash</h1>
+  <div class="label">Voice</div>
+  <div class="switch" id="switch" data-mode="instant" role="group" aria-label="Voice mode">
+    <div class="thumb"></div>
+    <button id="instant" aria-pressed="true">Instant</button>
+    <button id="accurate" aria-pressed="false">Accurate</button>
+  </div>
+  <div class="hint" id="hint"></div>
+  <div class="notice" id="notice" hidden>
+    Add an OpenAI key to use Accurate.
+    <div><button id="addKey">Open settings</button></div>
+  </div>
+  <div class="dev" id="dev" hidden>
+    <div class="label">Dev · evals</div>
+    <button id="exportTranscript">Export transcript</button>
+    <button id="exportVoiceLog">Export voice log</button>
+    <div class="hint" id="devStatus"></div>
+  </div>
+  <div class="footer"><a id="settings">Settings</a></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

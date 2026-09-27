@@ -1,25 +1,87 @@
 {
   "manifest_version": 3,
-  "name": "Jev YT",
+  "name": "Flash",
   "version": "0.1.0",
   "description": "Ask a YouTube video a question and jump to the answer.",
-  "permissions": ["storage"],
-  "host_permissions": ["https://www.youtube.com/*", "https://api.typesafe.ai/*"],
-  "background": { "service_worker": "src/background.js", "type": "module" },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://api.typesafe.ai/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
   "content_scripts": [
-    { "matches": ["https://www.youtube.com/*"], "js": ["src/page_bridge.js"], "world": "MAIN", "run_at": "document_start" },
-    { "matches": ["https://www.youtube.com/*"], "js": ["src/content.js"], "css": ["src/ui/overlay.css"], "run_at": "document_idle" }
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/page_bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "css": [
+        "src/ui/overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "src/app.js", "src/config.js", "src/bridge_client.js", "src/transcript.js", "src/transcript_parse.js",
-        "src/time.js", "src/chunker.js", "src/query.js", "src/scoring.js", "src/heat_layout.js",
-        "src/keys.js", "src/voice.js", "src/media_guard.js", "src/ui/toast.js", "src/ui/heatmap.js", "src/ui/messages.js"
+        "src/app.js",
+        "src/config.js",
+        "src/bridge_client.js",
+        "src/transcript.js",
+        "src/transcript_parse.js",
+        "src/time.js",
+        "src/chunker.js",
+        "src/query.js",
+        "src/scoring.js",
+        "src/search.js",
+        "src/heat_layout.js",
+        "src/keys.js",
+        "src/voice.js",
+        "src/media_guard.js",
+        "src/ui/toast.js",
+        "src/ui/heatmap.js",
+        "src/ui/messages.js",
+        "src/openai_transcribe.js"
       ],
-      "matches": ["https://www.youtube.com/*"]
+      "matches": [
+        "https://www.youtube.com/*"
+      ]
     }
   ],
   "options_page": "options/options.html",
-  "action": { "default_title": "Jev YT settings" }
+  "action": {
+    "default_title": "Flash",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "optional_host_permissions": [
+    "https://api.openai.com/*"
+  ]
 }

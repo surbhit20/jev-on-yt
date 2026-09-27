@@ -5,10 +5,11 @@ import { parseChapters } from './transcript_parse.js';
 import { formatTime } from './time.js';
 import * as chunker from './chunker.js';
 import { parseQuery, resolveHighlightOnly } from './query.js';
-import * as scoring from './scoring.js';
+import { startSignal, decideFromAnswers, refineRange, jumpTimeFor } from './search.js';
 import { segmentIndexForChunk, segmentAtX } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
-import { createVoice } from './voice.js';
+import { createVoice, createRecorderVoice } from './voice.js';
+import { toBase64 } from './openai_transcribe.js';
 import { createMediaGuard } from './media_guard.js';
 import { createToast } from './ui/toast.js';
 import { createHeatmap } from './ui/heatmap.js';
@@ -23,10 +24,22 @@ export function start() {
   const toast = createToast();
   const heatmap = createHeatmap({ onCellClick, onWaveClick, revealTickMs: CONFIG.revealTickMs });
   let listening = null; // toast handle while the mic is open
-  const voice = createVoice({
-    lang: CONFIG.voiceLang,
-    onInterim: (text) => listening?.setBody(text || 'Listening…'),
-  });
+  // Chrome's built-in recognition by default; OpenAI transcription when the user saved an OpenAI key.
+  const voices = {
+    chrome: createVoice({
+      lang: CONFIG.voiceLang,
+      onInterim: (text) => listening?.setBody(text || 'Listening…'),
+    }),
+    openai: createRecorderVoice({ toBase64 }),
+  };
+  let voiceEngine = 'chrome';
+  let voice = voices.chrome; // the engine of the current hold
+  let holdSeq = 0; // a newer hold makes an older hold's late result stale
+  const refreshVoiceEngine = () => {
+    chrome.runtime.sendMessage({ type: 'voiceMode' })
+      .then((res) => { if (res?.ok) voiceEngine = res.result.engine; })
+      .catch(() => {});
+  };
 
   const video = { id: null, gen: 0, status: 'idle' };
   let last = null; // last decision
@@ -36,6 +49,7 @@ export function start() {
   let preparingShown = false; // "Getting things ready" is on screen from a Control hold
   let searchSeq = 0; // guards against out-of-order search() calls for the same video
   let searching = false;
+  const voiceLog = []; // dev: what each engine heard, exported for the voice-to-text eval
 
   async function send(msg) {
     const res = await chrome.runtime.sendMessage(msg);
@@ -67,13 +81,9 @@ export function start() {
   }
 
   function startPass(videoId, chunks, windows, chapters) {
-    if (chapters.length) {
-      return Promise.resolve({
-        ok: true, start: scoring.startsFromChapters(chunks, chapters, CONFIG.chapterStart, CONFIG.chapterOther),
-      });
-    }
+    if (chapters.length) return Promise.resolve({ ok: true, start: startSignal(chunks, chapters, null, CONFIG) });
     return send({ type: 'prepStart', videoId, windows })
-      .then((r) => ({ ok: true, start: scoring.mergeByChunk(chunks.length, [r.start]) }))
+      .then((r) => ({ ok: true, start: startSignal(chunks, [], r.start, CONFIG) }))
       .catch((e) => {
         log('start pass failed:', e.message);
         return { ok: false, start: chunks.map(() => 0) };
@@ -102,14 +112,15 @@ export function start() {
       queued = null;
       readyNotice = false;
       preparingShown = false;
-      voice.abort();
+      voices.chrome.abort();
+      voices.openai.abort();
       media.reset();
       listening = null;
     }
     const gen = ++video.gen;
     Object.assign(video, {
       id: videoId, status: videoId ? 'preparing' : 'idle',
-      lines: null, chapters: [], chunks: null, windows: null, startPromise: null, durationSec: 0,
+      title: '', lines: null, chapters: [], chunks: null, windows: null, startPromise: null, durationSec: 0,
     });
     if (!videoId) return;
 
@@ -135,7 +146,7 @@ export function start() {
     const chunks = chunker.buildChunks(result.lines, chunkSec, CONFIG.sentenceSlack);
     const windows = chunker.buildWindows(chunks, CONFIG.windowSize, CONFIG.windowOverlap);
     Object.assign(video, {
-      status: 'ready', lines: result.lines, chapters, chunks, windows, durationSec,
+      status: 'ready', title: info.title ?? '', lines: result.lines, chapters, chunks, windows, durationSec,
       startPromise: startPass(videoId, chunks, windows, chapters),
     });
     log(`${videoId} "${info.title}" ready via ${result.method} in ${Math.round(performance.now() - t0)} ms: ` +
@@ -228,21 +239,17 @@ export function start() {
 
   async function refineTime(d, query, gen) {
     const { chunks, lines } = video;
-    let time = d.target.time;
-    const s = d.target.startIdx;
-    const e = Math.min(Math.max(d.target.from, s + 1), chunks.length - 1);
-    const from = chunks[s].lineIdx[0];
-    const to = chunks[e].lineIdx[1];
+    const { from, to } = refineRange(chunks, d.target);
     try {
       const { lineIdx } = await send({ type: 'refine', lines: lines.slice(from, to + 1), offset: from, query });
       if (gen === video.gen && lineIdx != null && lines[lineIdx]) {
-        time = Math.max(0, lines[lineIdx].start - CONFIG.refinePadSec);
         log(`refine → line ${lineIdx}: "${lines[lineIdx].text}"`);
+        return jumpTimeFor(lines, d.target, lineIdx, CONFIG);
       }
     } catch (err) {
       log('refine failed:', err.message);
     }
-    return time;
+    return d.target.time;
   }
 
   async function search(parsed, text) {
@@ -269,15 +276,7 @@ export function start() {
           st = await video.startPromise;
         }
         if (stale()) return;
-        const rel = scoring.mergeByChunk(chunks.length, res.perWindow.map((w) => w?.rel));
-        d = scoring.decide({
-          chunks, rel, start: st.start,
-          bests: res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null)),
-          exists: res.perWindow.map((w) => w?.exists ?? null),
-          unknown: rel.map((v) => v == null),
-          highlightOnly,
-          config: CONFIG,
-        });
+        d = decideFromAnswers({ chunks, perWindow: res.perWindow, start: st.start, highlightOnly, config: CONFIG });
         log(`"${parsed.query}": intent=${intent ? `${intent.choice} ${intent.confidence.toFixed(2)}` : 'n/a'} ` +
           `→ ${highlightOnly ? 'show' : 'go'}; ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
           `failedWindows=${JSON.stringify(res.failed)}, cached=${res.cached}`);
@@ -357,6 +356,8 @@ export function start() {
       holdStart() {
         if (!video.id) return;
         if (video.status !== 'ready') return showPreparing();
+        voice = voices[voiceEngine] ?? voices.chrome;
+        holdSeq++;
         if (!voice.supported) {
           toast.show({
             title: "Voice isn't available here",
@@ -382,8 +383,11 @@ export function start() {
         }
         if (!listening) return;
         listening = null;
-        const { text, error } = await voice.stop();
-        if (error === 'aborted') return; // a newer hold owns the mic (and the paused video)
+        const seq = holdSeq;
+        const engine = voice === voices.openai ? 'openai' : 'chrome';
+        const { text, audio, error } = await voice.stop();
+        refreshVoiceEngine();
+        if (error === 'aborted' || seq !== holdSeq) return; // a newer hold owns the mic (and the paused video)
         media.release();
         if (error === 'not-allowed' || error === 'service-not-allowed' || error === 'audio-capture') {
           toast.show({ title: 'Mic blocked', body: 'Double-tap Control to type instead.' });
@@ -396,10 +400,27 @@ export function start() {
           });
           return;
         }
-        submit(text);
+        if (engine === 'chrome') {
+          voiceLog.push({ engine, text: text ?? '' });
+          return submit(text);
+        }
+        if (!audio || audio.bytes < CONFIG.openai.minAudioBytes) {
+          voiceLog.push({ engine, text: '' });
+          return submit('');
+        }
+        toast.show({ title: 'Transcribing…' });
+        try {
+          const res = await send({ type: 'transcribe', audio });
+          if (seq !== holdSeq) return;
+          voiceLog.push({ engine, text: res.text });
+          submit(res.text);
+        } catch (err) {
+          if (seq === holdSeq) showError(err);
+        }
       },
       holdCancel() {
         voice.abort();
+        refreshVoiceEngine();
         media.release();
         if (listening) {
           listening = null;
@@ -439,6 +460,28 @@ export function start() {
     },
   });
 
+  // Dev-only exports for the evals, triggered from the toolbar popup.
+  function download(name, data) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const devExports = {
+    exportTranscript() {
+      if (video.status !== 'ready') return { ok: false, error: 'No transcript loaded on this tab yet.' };
+      const { id: videoId, title, durationSec, lines, chapters } = video;
+      download(`${videoId}.json`, { videoId, title, durationSec, lines, chapters });
+      return { ok: true };
+    },
+    exportVoiceLog() {
+      if (!voiceLog.length) return { ok: false, error: 'No voice results on this tab yet.' };
+      download('instant.json', voiceLog);
+      return { ok: true, count: voiceLog.length };
+    },
+  };
+
   const swallow = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
   window.addEventListener('keydown', (e) => { if (keys.keydown(e)) swallow(e); }, true);
   window.addEventListener('keyup', (e) => { if (keys.keyup(e)) swallow(e); }, true);
@@ -446,6 +489,14 @@ export function start() {
   window.addEventListener('blur', () => keys.blur());
   document.addEventListener('yt-navigate-finish', () => prepare().catch((e) => log('prepare failed:', e.message)));
 
+  refreshVoiceEngine();
+  window.addEventListener('focus', refreshVoiceEngine);
+  if (CONFIG.dev) chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    const handler = devExports[msg?.type];
+    if (!handler) return false;
+    sendResponse(handler());
+    return false;
+  });
   globalThis.jev = { ask: submit, video, get last() { return last; } };
   prepare().catch((e) => log('prepare failed:', e.message));
 }

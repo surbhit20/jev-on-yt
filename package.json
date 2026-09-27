@@ -1,9 +1,11 @@
 {
-  "name": "jev-yt",
+  "name": "flash",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "eval": "node eval/run.js",
+    "package": "node scripts/package.mjs"
   }
 }

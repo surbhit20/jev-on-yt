@@ -3,6 +3,7 @@ import {
   buildIntentRequest, readIntentAnswer,
 } from './request_builder.js';
 import { mapLimit } from './jev_client.js';
+import { startSignal, decideFromAnswers, refineRange, jumpTimeFor } from './search.js';
 
 async function fanOut(windows, limit, fn) {
   let fatal = null;
@@ -59,4 +60,23 @@ export async function runIntent({ text, call, model }) {
   } catch {
     return null;
   }
+}
+
+// The whole search against Jev, as the extension runs it (used by the evals): query, start signal,
+// decision, refined time for the top segment. `jumpTime` is null when nothing was found.
+export async function runSearch({ chunks, windows, lines, chapters, query, highlightOnly = false, call, config }) {
+  const opts = { call, limit: config.concurrency, model: config.model };
+  const [res, st] = await Promise.all([
+    runQuery({ windows, query, ...opts }),
+    chapters.length ? null : runStart({ windows, ...opts }),
+  ]);
+  const start = startSignal(chunks, chapters, st?.start, config);
+  const decision = decideFromAnswers({ chunks, perWindow: res.perWindow, start, highlightOnly, config });
+  const top = decision.segments[0];
+  if (decision.kind === 'absent' || !top) return { decision, jumpTime: null, failed: res.failed };
+  const { from, to } = refineRange(chunks, top);
+  const lineIdx = await runRefine({
+    lines: lines.slice(from, to + 1), offset: from, query, call, model: config.model, maxLines: config.maxRefineLines,
+  });
+  return { decision, jumpTime: jumpTimeFor(lines, top, lineIdx, config), failed: res.failed };
 }
