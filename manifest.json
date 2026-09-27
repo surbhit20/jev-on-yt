@@ -50,6 +50,7 @@
         "src/chunker.js",
         "src/query.js",
         "src/scoring.js",
+        "src/search.js",
         "src/heat_layout.js",
         "src/keys.js",
         "src/voice.js",

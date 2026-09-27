@@ -5,7 +5,7 @@ import { parseChapters } from './transcript_parse.js';
 import { formatTime } from './time.js';
 import * as chunker from './chunker.js';
 import { parseQuery, resolveHighlightOnly } from './query.js';
-import * as scoring from './scoring.js';
+import { startSignal, decideFromAnswers, refineRange, jumpTimeFor } from './search.js';
 import { segmentIndexForChunk, segmentAtX } from './heat_layout.js';
 import { createKeyWatcher } from './keys.js';
 import { createVoice, createRecorderVoice } from './voice.js';
@@ -80,13 +80,9 @@ export function start() {
   }
 
   function startPass(videoId, chunks, windows, chapters) {
-    if (chapters.length) {
-      return Promise.resolve({
-        ok: true, start: scoring.startsFromChapters(chunks, chapters, CONFIG.chapterStart, CONFIG.chapterOther),
-      });
-    }
+    if (chapters.length) return Promise.resolve({ ok: true, start: startSignal(chunks, chapters, null, CONFIG) });
     return send({ type: 'prepStart', videoId, windows })
-      .then((r) => ({ ok: true, start: scoring.mergeByChunk(chunks.length, [r.start]) }))
+      .then((r) => ({ ok: true, start: startSignal(chunks, [], r.start, CONFIG) }))
       .catch((e) => {
         log('start pass failed:', e.message);
         return { ok: false, start: chunks.map(() => 0) };
@@ -242,21 +238,17 @@ export function start() {
 
   async function refineTime(d, query, gen) {
     const { chunks, lines } = video;
-    let time = d.target.time;
-    const s = d.target.startIdx;
-    const e = Math.min(Math.max(d.target.from, s + 1), chunks.length - 1);
-    const from = chunks[s].lineIdx[0];
-    const to = chunks[e].lineIdx[1];
+    const { from, to } = refineRange(chunks, d.target);
     try {
       const { lineIdx } = await send({ type: 'refine', lines: lines.slice(from, to + 1), offset: from, query });
       if (gen === video.gen && lineIdx != null && lines[lineIdx]) {
-        time = Math.max(0, lines[lineIdx].start - CONFIG.refinePadSec);
         log(`refine → line ${lineIdx}: "${lines[lineIdx].text}"`);
+        return jumpTimeFor(lines, d.target, lineIdx, CONFIG);
       }
     } catch (err) {
       log('refine failed:', err.message);
     }
-    return time;
+    return d.target.time;
   }
 
   async function search(parsed, text) {
@@ -283,15 +275,7 @@ export function start() {
           st = await video.startPromise;
         }
         if (stale()) return;
-        const rel = scoring.mergeByChunk(chunks.length, res.perWindow.map((w) => w?.rel));
-        d = scoring.decide({
-          chunks, rel, start: st.start,
-          bests: res.perWindow.map((w) => (w?.best ? chunker.chunkIndex(w.best) : null)),
-          exists: res.perWindow.map((w) => w?.exists ?? null),
-          unknown: rel.map((v) => v == null),
-          highlightOnly,
-          config: CONFIG,
-        });
+        d = decideFromAnswers({ chunks, perWindow: res.perWindow, start: st.start, highlightOnly, config: CONFIG });
         log(`"${parsed.query}": intent=${intent ? `${intent.choice} ${intent.confidence.toFixed(2)}` : 'n/a'} ` +
           `→ ${highlightOnly ? 'show' : 'go'}; ${d.kind}, ${d.segments.length} segments, maxExists=${d.maxExists.toFixed(2)}, ` +
           `failedWindows=${JSON.stringify(res.failed)}, cached=${res.cached}`);
