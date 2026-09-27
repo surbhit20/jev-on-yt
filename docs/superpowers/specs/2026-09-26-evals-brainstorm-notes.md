@@ -1,6 +1,6 @@
 # Evals: brainstorm notes (in progress)
 
-Status: brainstorming, not yet a spec. Continue from "Open question" below.
+Status: superseded by `2026-09-27-evals-design.md` (both open questions answered: chapters + hand labels; voice-to-text check added).
 
 ## Context
 - Branch `feat/openai-voice` (pushed, not merged): optional OpenAI transcription + toolbar popup
