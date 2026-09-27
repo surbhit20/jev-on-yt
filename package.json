@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "eval": "node eval/run.js"
+    "eval": "node eval/run.js",
+    "package": "node scripts/package.mjs"
   }
 }
