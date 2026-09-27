@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="960" height="560" viewBox="0 0 960 560" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <!-- A: the bolt strikes the timeline and lands on the moment -->
+    <symbol id="a" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="22" fill="#111"/>
+      <line x1="16" y1="80" x2="84" y2="80" stroke="#3a3a3a" stroke-width="6" stroke-linecap="round"/>
+      <line x1="16" y1="80" x2="40" y2="80" stroke="#a3e635" stroke-width="6" stroke-linecap="round"/>
+      <path d="M64 10 L32 48 H49 L40 72 L72 34 H55 Z" fill="#a3e635"/>
+      <circle cx="40" cy="80" r="7" fill="#a3e635" stroke="#111" stroke-width="2.5"/>
+    </symbol>
+    <!-- B: play button with a bolt cut through it -->
+    <symbol id="b" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="22" fill="#111"/>
+      <path d="M30 16 Q26 14 26 19 V81 Q26 86 30 84 L84 54 Q88 50 84 46 Z" fill="#a3e635"/>
+      <path d="M58 20 L36 52 H50 L42 80 L68 45 H53 Z" fill="#111"/>
+    </symbol>
+    <!-- C: the heat wave's tallest peak is a bolt -->
+    <symbol id="c" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="22" fill="#111"/>
+      <path d="M12 80 C20 80 22 68 30 68 C38 68 40 80 48 80 H54 C62 80 64 72 72 72 C80 72 82 80 88 80 Z" fill="#a3e635"/>
+      <path d="M62 10 L34 50 H49 L43 80 L72 38 H57 Z" fill="#a3e635"/>
+      <line x1="12" y1="84" x2="88" y2="84" stroke="#3a3a3a" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+  <rect width="960" height="560" fill="#f5f4f0"/>
+  <text x="40" y="52" font-size="26" font-weight="700" fill="#111">Flash — logo concepts</text>
+  <text x="40" y="80" font-size="15" fill="#555">Lime on near-black, the extension's existing colours. Bottom rows: real toolbar sizes (32 px, 16 px).</text>
+
+  <g transform="translate(40,110)">
+    <use xlink:href="#a" width="220" height="220"/>
+    <text y="256" font-size="18" font-weight="700" fill="#111">A · Strike</text>
+    <text y="280" font-size="14" fill="#555">A bolt lands on the timeline:</text>
+    <text y="298" font-size="14" fill="#555">straight to the moment.</text>
+    <rect y="318" width="220" height="56" rx="10" fill="#202124"/>
+    <use xlink:href="#a" x="16" y="330" width="32" height="32"/><use xlink:href="#a" x="64" y="338" width="16" height="16"/>
+    <rect y="384" width="220" height="56" rx="10" fill="#fff" stroke="#ddd"/>
+    <use xlink:href="#a" x="16" y="396" width="32" height="32"/><use xlink:href="#a" x="64" y="404" width="16" height="16"/>
+  </g>
+  <g transform="translate(370,110)">
+    <use xlink:href="#b" width="220" height="220"/>
+    <text y="256" font-size="18" font-weight="700" fill="#111">B · Play, instantly</text>
+    <text y="280" font-size="14" fill="#555">A play button split by a bolt:</text>
+    <text y="298" font-size="14" fill="#555">reads as video + speed at 16 px.</text>
+    <rect y="318" width="220" height="56" rx="10" fill="#202124"/>
+    <use xlink:href="#b" x="16" y="330" width="32" height="32"/><use xlink:href="#b" x="64" y="338" width="16" height="16"/>
+    <rect y="384" width="220" height="56" rx="10" fill="#fff" stroke="#ddd"/>
+    <use xlink:href="#b" x="16" y="396" width="32" height="32"/><use xlink:href="#b" x="64" y="404" width="16" height="16"/>
+  </g>
+  <g transform="translate(700,110)">
+    <use xlink:href="#c" width="220" height="220"/>
+    <text y="256" font-size="18" font-weight="700" fill="#111">C · Peak</text>
+    <text y="280" font-size="14" fill="#555">The lime wave over the timeline:</text>
+    <text y="298" font-size="14" fill="#555">its top peak is a bolt.</text>
+    <rect y="318" width="220" height="56" rx="10" fill="#202124"/>
+    <use xlink:href="#c" x="16" y="330" width="32" height="32"/><use xlink:href="#c" x="64" y="338" width="16" height="16"/>
+    <rect y="384" width="220" height="56" rx="10" fill="#fff" stroke="#ddd"/>
+    <use xlink:href="#c" x="16" y="396" width="32" height="32"/><use xlink:href="#c" x="64" y="404" width="16" height="16"/>
+  </g>
+</svg>
